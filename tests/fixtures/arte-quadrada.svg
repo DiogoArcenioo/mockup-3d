@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="1000" viewBox="0 0 1000 1000">
+  <rect width="1000" height="1000" rx="80" fill="#e9efde"/>
+  <circle cx="500" cy="390" r="210" fill="#365b46"/>
+  <path d="M460 250h130v55H515v67h65v55h-65v103h-55Z" fill="#e9efde"/>
+  <text x="500" y="740" text-anchor="middle" font-family="Arial,sans-serif" font-weight="700" font-size="100" fill="#365b46">SUA MARCA</text>
+  <text x="500" y="817" text-anchor="middle" font-family="Arial,sans-serif" font-size="32" letter-spacing="8" fill="#7e906f">FEITA PARA DURAR</text>
+</svg>

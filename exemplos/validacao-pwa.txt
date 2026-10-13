@@ -1,0 +1,13 @@
+10/10 verificações no navegador; 14/14 testes Node passaram.
+Prévia responsiva e instruções verificadas em iframe de 390 × 844 px.
+
+PASS App abre em uma janela própria: standalone
+PASS Início e escopo na subpasta correta: /dist/
+PASS Ícone any 192x192: PNG carregado
+PASS Ícone any 512x512: PNG carregado
+PASS Ícone maskable 512x512: PNG carregado
+PASS Service worker ativo: activated
+PASS Interface disponível offline: 200; forma-mockup:/dist/:4bfedeea07fb72e9
+PASS JS, CSS, ícones e manifest disponíveis offline: 6 recursos presentes
+PASS Fonte disponível offline: fonte local
+PASS Somente recursos do app no cache: 12 arquivos; sem arte de usuário

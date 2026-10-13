@@ -1,0 +1,20 @@
+17/17 verificações passaram
+
+PASS Cores sRGB vermelho / azul: RGB [[223,26,38],[34,85,221]], erro máximo 0/255
+PASS Cores sRGB verde / amarelo: RGB [[21,148,71],[239,180,26]], erro máximo 0/255
+PASS Cores sRGB cinza / preto: RGB [[128,128,128],[24,24,24]], erro máximo 0/255
+PASS Mesmas dimensões reais: 2.765,2.465,2.000 / 2.765,2.465,2.000
+PASS Alça e encaixes ficam fora do interior: 110 raios atingem a parede interna antes da alça
+PASS Mesmo tamanho na imagem: câmera ortográfica; altura projetada idêntica
+PASS Giro de 180° troca vermelho / azul: RGB [[34,85,221],[223,26,38]]
+PASS Giro de 180° troca verde / amarelo: RGB [[239,180,26],[21,148,71]]
+PASS Giro de 180° troca cinza / preto: RGB [[24,24,24],[128,128,128]]
+PASS Arte atravessa a emenda 360°: amarelo / verde nas bordas: 239,180,26,255 / 21,148,71,255
+PASS PNG conserva as cores: 1080 × 1080; RGB azul 34,85,221
+PASS Prévia sem contorno da área branca: diferença para cerâmica sem estampa em 360 / 600 px: 0 / 0/255
+PASS Caneca preta conserva as cores da arte: erro máximo 0/255
+PASS Transparência revela a cerâmica preta: área transparente RGB 31,32,34; tinta vermelha RGB 223,26,38
+PASS Tinta branca aparece na caneca preta: RGB 255,255,255
+PASS PNG exporta a caneca preta sem estampa: prévia RGB 31,32,34; PNG RGB 31,31,34
+PASS Remover arte deixa a caneca branca vazia: RGB 243,243,243
+

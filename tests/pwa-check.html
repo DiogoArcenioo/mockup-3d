@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="pt-BR"><meta charset="utf-8"><title>Verificação do app instalável</title><style>body{font:15px system-ui;max-width:850px;margin:40px auto;padding:0 24px;color:#365b46}pre{white-space:pre-wrap;line-height:1.9}img{width:128px;height:128px}#result{font-weight:600}</style><h1>Instalação e uso offline</h1><img src="../dist/icons/icon-192.png" alt="Caneca branca sobre fundo verde"><p id="result">Verificando…</p><pre id="log"></pre><script type="module">
+const result = document.querySelector('#result');
+const log = document.querySelector('#log');
+const checks = [];
+const base = new URL('../dist/', location.href);
+function check(name, passed, detail) {
+  checks.push(passed);
+  log.textContent += `${passed ? 'PASS' : 'FAIL'} ${name}: ${detail}\n`;
+}
+try {
+  const manifest = await (await fetch(new URL('manifest.webmanifest', base))).json();
+  check('App abre em uma janela própria', manifest.display === 'standalone', manifest.display);
+  check('Início e escopo na subpasta correta', new URL(manifest.start_url, base).pathname === base.pathname + 'index.html' &&
+    new URL(manifest.scope, base).pathname === base.pathname, base.pathname);
+  for (const icon of manifest.icons) {
+    const image = new Image();
+    image.src = new URL(icon.src, base);
+    await image.decode();
+    check(`Ícone ${icon.purpose} ${icon.sizes}`, icon.sizes === `${image.naturalWidth}x${image.naturalHeight}`, 'PNG carregado');
+  }
+  const registration = await navigator.serviceWorker.getRegistration(new URL('index.html', base));
+  check('Service worker ativo', registration?.active?.state === 'activated', registration?.active?.state ?? 'ausente');
+  const cacheName = (await caches.keys()).find(name => name.startsWith(`forma-mockup:${base.pathname}:`));
+  const cache = cacheName && await caches.open(cacheName);
+  const requests = cache ? await cache.keys() : [];
+  const html = cache && await cache.match(new URL('index.html', base));
+  check('Interface disponível offline', Boolean(html?.ok), html ? `${html.status}; ${cacheName}` : 'ausente');
+  const compiled = html && new DOMParser().parseFromString(await html.text(), 'text/html');
+  const resources = compiled ? [...compiled.querySelectorAll('script[src],link[href]')].map(element =>
+    new URL(element.getAttribute('src') || element.getAttribute('href'), base).href) : [];
+  const missing = [];
+  for (const url of resources) if (!(await cache.match(url))) missing.push(url);
+  check('JS, CSS, ícones e manifest disponíveis offline', resources.length >= 6 && missing.length === 0,
+    missing.length ? missing.join(', ') : `${resources.length} recursos presentes`);
+  check('Fonte disponível offline', requests.some(request => request.url.endsWith('.woff2')), 'fonte local');
+  check('Somente recursos do app no cache', requests.length >= 12 && requests.every(request => {
+    const url = new URL(request.url);
+    return url.origin === location.origin && url.pathname.startsWith(base.pathname) && !url.pathname.endsWith('art-botanica.svg');
+  }), `${requests.length} arquivos; sem arte de usuário`);
+  result.textContent = `${checks.filter(Boolean).length}/${checks.length} verificações passaram`;
+  result.dataset.passed = String(checks.every(Boolean));
+} catch (error) { result.textContent = `ERRO: ${error}`; result.dataset.passed = 'false'; }
+</script></html>
