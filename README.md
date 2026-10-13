@@ -1,6 +1,6 @@
 # forma — Mockup Studio
 
-Gerador de mockups de canecas em 3D, feito com TypeScript, Three.js e Vite. A arte é aplicada com coordenadas UV ao corpo curvo da caneca; o interior, a borda e a alça continuam em cerâmica. As proporções da imagem são preservadas usando as dimensões físicas da superfície.
+Gerador de mockups de canecas em 3D, feito com TypeScript, Three.js e Vite. A arte é aplicada com coordenadas UV ao corpo curvo da caneca; o interior e a alça continuam em cerâmica. O encaixe inicial e o controle de escala preservam as proporções da imagem usando as dimensões físicas da superfície; o ajuste de altura permite esticar só o sentido vertical.
 
 ## Abrir no Windows
 
@@ -18,7 +18,7 @@ npm.cmd run dev
 ## Criar um mockup
 
 1. O estúdio abre com canecas brancas sem estampa. Envie uma arte PNG, JPG, WebP ou SVG, ou arraste o arquivo para a área de upload. Limite de 20 MB. **Remover arte** deixa a caneca vazia, mantendo a cor selecionada; **Recomeçar** restaura o estado inicial.
-2. Em **Ajustar a arte**, ajuste escala e posição. **Arte contínua ao redor da caneca**, a opção inicial, aplica uma única imagem à superfície em 360°. **Repetir na frente e no verso** é uma alternativa opcional para repetir uma marca nos dois lados. A proporção da arte é preservada.
+2. Em **Ajustar a arte**, ajuste escala e posição. **Altura da estampa** aumenta ou reduz somente a dimensão vertical, mantendo a largura e a distância da alça. **Preencher altura da caneca** centraliza verticalmente a estampa e cobre toda a lateral, do topo à base. **Escala** continua ampliando as duas dimensões na mesma proporção. **Arte contínua ao redor da caneca**, a opção inicial, aplica uma única imagem à superfície em 360°. **Repetir na frente e no verso** permite repetir uma marca nos dois lados.
 3. Escolha **Frente e verso**, **Individual** ou **Detalhe**. No primeiro enquadramento, as duas canecas têm exatamente o mesmo tamanho, altura e profundidade, com ângulos separados por 180°. Elas compartilham a mesma textura: girar 180° revela o verso na esquerda e a frente na direita. Arraste a visualização para orbitar e use a roda do mouse para aproximar. O botão de restaurar câmera volta ao ângulo inicial, mantendo seus ajustes de giro.
 4. Em **A cena**, escolha **Branca** ou **Preta** em **Cor da caneca**. Corpo, interior e alça mudam juntos nas duas vistas, sem mover a estampa. Escolha fundo estúdio, areia, sálvia ou transparente; formato quadrado, horizontal ou retrato; e resolução de 1080, 2400 ou 3600 px no lado maior.
 5. Clique em **Baixar mockup**. O PNG é renderizado na resolução escolhida, sem interface e sem marca d'água. O fundo transparente exporta apenas as canecas, sem piso nem sombras.
@@ -29,7 +29,7 @@ Na caneca preta, as áreas transparentes deixam a cerâmica aparecer; o branco p
 
 Fundos pretos neutros da imagem se integram automaticamente à cerâmica preta, com os mesmos reflexos, para evitar um retângulo chapado ao redor da estampa. Tons quase pretos passam por uma transição suave; as tintas coloridas, inclusive vermelho e azul escuros, continuam preservadas. A prévia e o PNG usam o mesmo tratamento.
 
-O modelo é uma simulação para apresentação, não um gabarito de impressão. A arte circula pela superfície inteira, inclusive quando deslocada através da emenda da textura. O encaixe inicial preserva a proporção e pode deixar áreas sem estampa; ajuste escala e posição se quiser ampliar a cobertura. A borda e a base curva têm uma pequena margem vertical. Para produção, use as medidas do fornecedor.
+O modelo é uma simulação para apresentação, não um gabarito de impressão. A arte circula pela superfície inteira, inclusive quando deslocada através da emenda da textura. O encaixe inicial preserva a proporção e pode deixar áreas sem estampa; ajuste escala e posição se quiser ampliar a cobertura. O controle de altura remove as faixas sem estampa no topo e na base externa sem mudar a margem lateral próxima da alça. O interior e a borda interna continuam em cerâmica. Artes com margens transparentes ou brancas no próprio arquivo podem precisar de mais altura para ocupar a lateral. Para produção, use as medidas do fornecedor.
 
 As cores sRGB da imagem são preservadas nas áreas frontais. O brilho e a exposição da cerâmica são calculados separadamente da estampa, com escurecimento neutro e suave nas laterais para manter a curvatura sem desbotar as cores. PNGs usam o mesmo tratamento de cor da prévia. Durante o giro, a separação se ajusta para dar espaço às alças voltadas para o centro; a escala das duas canecas permanece idêntica.
 

@@ -3,10 +3,10 @@ import '@fontsource-variable/dm-sans';
 import { icon } from './icons';
 import { setupInstallUI } from './pwa';
 import { MockupScene, BACKGROUNDS, type ViewPreset, type BackgroundPreset, type MugColor } from './scene';
-import type { ArtworkSettings } from './artwork';
+import { fillArtworkHeight, type ArtworkSettings } from './artwork';
 
 const state = {
-  artwork: { scale: 1, x: 0, y: 0, layout: 'wrap' } as ArtworkSettings,
+  artwork: { scale: 1, heightScale: 1, x: 0, y: 0, layout: 'wrap' } as ArtworkSettings,
   view: 'duo' as ViewPreset,
   background: 'studio' as BackgroundPreset,
   mugColor: 'white' as MugColor,
@@ -46,9 +46,10 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
           <details class="adjustments" id="art-adjustments" hidden><summary>${icon('sliders')} Ajustar a arte ${icon('arrow', 'chevron')}</summary><div class="adjustment-content">
             <label class="select-label" for="layout">Aplicação</label><select id="layout"><option value="wrap">Arte contínua ao redor da caneca</option><option value="repeat">Repetir na frente e no verso</option></select>
             <div class="slider-field"><label for="scale">Escala <output id="scale-value">100%</output></label><input id="scale" type="range" min="25" max="200" value="100" /><span class="slider-ends"><span>Menor</span><span>Maior</span></span></div>
+            <div class="slider-field"><label for="height-scale">Altura da estampa <output id="height-scale-value">100%</output></label><input id="height-scale" type="range" min="25" max="200" step="0.1" value="100" /><button class="small-text-button fill-height-button" id="fill-height">Preencher altura da caneca</button></div>
             <div class="slider-field"><label for="position-x">Posição horizontal <output id="position-x-value">0</output></label><input id="position-x" type="range" min="-100" max="100" value="0" /></div>
             <div class="slider-field"><label for="position-y">Posição vertical <output id="position-y-value">0</output></label><input id="position-y" type="range" min="-100" max="100" value="0" /></div>
-            <p class="field-note">A arte envolve a caneca em uma única estampa. A esquerda mostra a frente; a direita, o verso. Gire para explorar os outros lados. A proporção é preservada. PNG com transparência deixa a cor da caneca aparecer.</p><button class="small-text-button" id="reset-art">Restaurar ajustes da arte</button>
+            <p class="field-note">Escala mantém a proporção. Altura da estampa ajusta só o sentido vertical, mantendo a distância da alça. A esquerda mostra a frente; a direita, o verso. PNG com transparência deixa a cor da caneca aparecer.</p><button class="small-text-button" id="reset-art">Restaurar ajustes da arte</button>
           </div></details>
         </section>
         <section class="editor-section"><div class="section-heading"><span class="step">02</span><h2>A cena</h2><span class="section-caption">O cenário ideal</span></div>
@@ -104,11 +105,21 @@ function updateArtwork() {
   if (currentImage) studio?.setArtwork(currentImage, state.artwork);
 }
 
+function updateHeightRange() {
+  const input = element<HTMLInputElement>('height-scale');
+  const filled = currentImage && fillArtworkHeight(currentImage.naturalWidth, currentImage.naturalHeight, state.artwork);
+  // Very wide artwork can need more than 200% height to fill the mug.
+  input.max = String(Math.max(200, Math.ceil((filled?.heightScale ?? 1) * 100),
+    Math.ceil((state.artwork.heightScale ?? 1) * 100)));
+  input.dispatchEvent(new Event('input'));
+}
+
 function resetArtworkSettings() {
-  state.artwork = { scale: 1, x: 0, y: 0, layout: 'wrap' };
-  for (const id of ['scale', 'position-x', 'position-y']) {
+  state.artwork = { scale: 1, heightScale: 1, x: 0, y: 0, layout: 'wrap' };
+  element<HTMLInputElement>('height-scale').value = '100';
+  for (const id of ['scale', 'height-scale', 'position-x', 'position-y']) {
     const input = element<HTMLInputElement>(id);
-    input.value = id === 'scale' ? '100' : '0';
+    input.value = id === 'scale' || id === 'height-scale' ? '100' : '0';
     input.dispatchEvent(new Event('input'));
   }
   element<HTMLSelectElement>('layout').value = 'wrap';
@@ -211,14 +222,26 @@ function bindRange(id: string, unit: string, onChange: (value: number) => void) 
   input.addEventListener('input', update);
   update();
 }
-bindRange('scale', '%', value => { state.artwork.scale = value / 100; updateArtwork(); });
+bindRange('height-scale', '%', value => { state.artwork.heightScale = value / 100; updateArtwork(); });
+bindRange('scale', '%', value => { state.artwork.scale = value / 100; updateHeightRange(); });
 bindRange('position-x', '', value => { state.artwork.x = value; updateArtwork(); });
 bindRange('position-y', '', value => { state.artwork.y = value; updateArtwork(); });
 bindRange('rotation', '°', value => { state.rotation = value; studio?.setRotation(value); });
 bindRange('zoom', '%', value => { state.zoom = value; studio?.setZoom(value); });
 element<HTMLSelectElement>('layout').addEventListener('change', event => {
   state.artwork.layout = (event.target as HTMLSelectElement).value as ArtworkSettings['layout'];
-  updateArtwork();
+  updateHeightRange();
+});
+element('fill-height').addEventListener('click', () => {
+  if (!currentImage) return;
+  const filled = fillArtworkHeight(currentImage.naturalWidth, currentImage.naturalHeight, state.artwork);
+  const input = element<HTMLInputElement>('height-scale');
+  // Round upwards to keep the print over the full height at texture edges.
+  input.value = String(Math.ceil((filled.heightScale ?? 1) * 1000) / 10);
+  updateHeightRange();
+  const position = element<HTMLInputElement>('position-y');
+  position.value = '0';
+  position.dispatchEvent(new Event('input'));
 });
 element('reset-art').addEventListener('click', resetArtworkSettings);
 

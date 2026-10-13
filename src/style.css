@@ -12,3 +12,4 @@
 @media(max-width:740px){.header{gap:12px}.header-end{gap:8px}.brand-caption,.brand-divider{display:none}.install-button{font-size:10px;padding:8px 10px}.install-app-heading h2{font-size:21px}#install-dialog{padding:25px}.install-app-heading{gap:12px}}
 @media(display-mode:standalone){.header{padding-top:env(safe-area-inset-top)}.footer{padding-bottom:max(24px,env(safe-area-inset-bottom))}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition:none!important;scroll-behavior:auto!important}}
+.fill-height-button{display:block;min-height:32px;margin-top:5px;font-size:10px;text-align:left}

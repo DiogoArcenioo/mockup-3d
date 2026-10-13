@@ -1,6 +1,6 @@
 import { Box3, Quaternion, Raycaster, Vector2, Vector3, type Mesh, type MeshPhysicalMaterial } from 'three';
 import { MockupScene } from '../src/scene.ts';
-import { paintArtwork, TEXTURE_WIDTH, TEXTURE_HEIGHT } from '../src/artwork.ts';
+import { paintArtwork, fillArtworkHeight, TEXTURE_WIDTH, TEXTURE_HEIGHT } from '../src/artwork.ts';
 
 const log = document.querySelector<HTMLPreElement>('#report')!;
 const result = document.querySelector<HTMLElement>('#result')!;
@@ -103,6 +103,42 @@ async function run() {
     exportedRGB.every((channel, c) => Math.abs(channel - targets[0].colors[1][c]) <= 5),
     `${exported.naturalWidth} × ${exported.naturalHeight}; RGB azul ${exportedRGB}`);
   URL.revokeObjectURL(exportURL);
+
+  studio.setRotation(0);
+  const filledSettings = fillArtworkHeight(image.naturalWidth, image.naturalHeight, settings);
+  const fullHeightCanvas = document.createElement('canvas');
+  paintArtwork(fullHeightCanvas, image, image.naturalWidth, image.naturalHeight, filledSettings);
+  const fullHeightCtx = fullHeightCanvas.getContext('2d')!;
+  const coveragePixels = [2, TEXTURE_HEIGHT - 3].flatMap(y => [0.25, 0.75].map(u =>
+    fullHeightCtx.getImageData(Math.round(u * TEXTURE_WIDTH), y, 1, 1).data[3]));
+  const handleGapPixels = [2, TEXTURE_HEIGHT / 2, TEXTURE_HEIGHT - 3].flatMap(y =>
+    [2, TEXTURE_WIDTH - 3].map(x => fullHeightCtx.getImageData(x, y, 1, 1).data[3]));
+  check('Altura total cobre as extremidades e mantém o espaço da alça',
+    coveragePixels.every(alpha => alpha === 255) && handleGapPixels.every(alpha => alpha === 0),
+    `topo / base opacos ${coveragePixels.join(', ')}; margem da alça transparente ${handleGapPixels.join(', ')}`);
+  studio.setArtwork(image, filledSettings);
+  studio.renderer.render(studio.scene, studio.camera);
+  const edgeColors = [sample(0, 2.4), sample(1, 2.4), sample(0, 0.09), sample(1, 0.09)];
+  check('Prévia aplica a estampa no topo e na base externa',
+    edgeColors[0][0] > 120 && edgeColors[0][1] < 80 && edgeColors[1][2] > 120 && edgeColors[1][0] < 80 &&
+    edgeColors[2].every(channel => channel < 170) && edgeColors[3].every(channel => channel < 60),
+    `RGB topo vermelho / azul e base cinza / preto ${JSON.stringify(edgeColors)}`);
+  const filledPNG = await studio.exportPNG(1080, 1);
+  const filledURL = URL.createObjectURL(filledPNG);
+  exported.src = filledURL;
+  await exported.decode();
+  exportCtx.drawImage(exported, 0, 0);
+  const filledExportColors = [0, 1].flatMap(mug => [2.4, 0.09].map(y => {
+    const projected = new Vector3(studio.mugs[mug].position.x, y, 1).project(studio.camera);
+    return Array.from(exportCtx.getImageData(Math.round((projected.x / 2 + 0.5) * 1080),
+      Math.round((0.5 - projected.y / 2) * 1080), 1, 1).data.subarray(0, 3));
+  }));
+  check('PNG conserva a cobertura de altura das duas vistas',
+    filledExportColors[0][0] > 120 && filledExportColors[0][1] < 80 &&
+    filledExportColors[2][2] > 120 && filledExportColors[2][0] < 80 &&
+    filledExportColors[1].every(channel => channel < 170) && filledExportColors[3].every(channel => channel < 60),
+    `RGB frente topo / base e verso topo / base ${JSON.stringify(filledExportColors)}`);
+  URL.revokeObjectURL(filledURL);
 
   studio.setRotation(0);
   // A white upload must look exactly like bare ceramic, even when mipmaps shrink it.
