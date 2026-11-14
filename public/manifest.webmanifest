@@ -1,8 +1,8 @@
 {
   "id": "./",
-  "name": "forma — Mockup Studio",
-  "short_name": "forma",
-  "description": "Seu estúdio de mockups de canecas 3D. Envie uma arte, personalize e baixe a imagem.",
+  "name": "Infinity — Gestão e Mockup Studio",
+  "short_name": "Infinity",
+  "description": "Cadastre insumos, registre compras e acompanhe seu estoque. Crie também mockups de canecas em 3D.",
   "lang": "pt-BR",
   "start_url": "./index.html",
   "scope": "./",

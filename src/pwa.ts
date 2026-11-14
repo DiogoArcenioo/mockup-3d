@@ -33,7 +33,7 @@ export function setupInstallUI(notify: (message: string, error?: boolean) => voi
     deferredPrompt = undefined;
     dialog.close();
     update();
-    notify('O forma foi instalado. Seu estúdio agora está na tela inicial.');
+    notify('O Infinity foi instalado. Seu estúdio agora está na tela inicial.');
   });
   standalone.addEventListener('change', event => {
     installed = event.matches;
@@ -56,7 +56,7 @@ export function setupInstallUI(notify: (message: string, error?: boolean) => voi
       const choice = await prompt.userChoice;
       if (choice.outcome === 'accepted') {
         installed = true;
-        notify('Instalação iniciada. O forma será adicionado aos seus aplicativos.');
+        notify('Instalação iniciada. O Infinity será adicionado aos seus aplicativos.');
       }
     } catch {
       notify('Abra o menu do navegador e escolha “Instalar app” ou “Adicionar à tela inicial”.', true);
@@ -73,7 +73,7 @@ export function setupInstallUI(notify: (message: string, error?: boolean) => voi
   dialog.addEventListener('click', event => { if (event.target === dialog) dialog.close(); });
 
   // Cache compiled files only; Vite development assets change on every edit.
-  if (import.meta.env.PROD && window.isSecureContext && 'serviceWorker' in navigator) {
+  if (!location.pathname.startsWith('/legacy/') && import.meta.env.PROD && window.isSecureContext && 'serviceWorker' in navigator) {
     const worker = new URL('sw.js', document.baseURI);
     void navigator.serviceWorker.register(worker.href, { scope: './', updateViaCache: 'none' })
       .then(registration => {

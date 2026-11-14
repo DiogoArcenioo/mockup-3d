@@ -1,0 +1,80 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
+import { createPool } from '../server/db.mjs';
+import { hashPassword, verifyPassword } from '../apps/api/dist/password.js';
+const base = process.env.AUTH_TEST_URL || 'http://127.0.0.1:3001/api';
+const cookieOf = response => response.headers.get('set-cookie')?.split(';')[0] || '';
+async function request(path, { method = 'GET', body, cookie = '', headers = {} } = {}) {
+  const response = await fetch(base + path, { method, headers: { 'Content-Type': 'application/json', Cookie: cookie, ...headers }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+  return { response, data: await response.json() };
+}
+test('senhas usam salt e hash, com comparação correta', async () => {
+  const first = await hashPassword('test-only-secret');
+  const second = await hashPassword('test-only-secret');
+  assert.notEqual(first, second);
+  assert.equal(await verifyPassword('test-only-secret', first), true);
+  assert.equal(await verifyPassword('wrong-secret', first), false);
+  assert.equal(await verifyPassword('test-only-secret', 'invalid'), false);
+});
+test('Nest + PostgreSQL: login, autorização administrativa, cookies, sessão e logout', async () => {
+  assert.ok(process.env.ADMIN_LOGIN && process.env.ADMIN_PASSWORD, 'Configure o bootstrap privado para este teste.');
+  const pool = createPool();
+  const login = 'qa_' + randomUUID().replaceAll('-', '').slice(0, 15);
+  let adminCookie = '', memberCookie = '';
+  try {
+    for (const path of ['/auth/me', '/users', '/products', '/colors', '/brands', '/entries', '/movements', '/summary', '/health']) assert.equal((await request(path)).response.status, 401, path);
+    assert.equal((await request('/sales',{method:'POST',body:{}})).response.status,401);
+    assert.equal((await request('/products/'+randomUUID()+'/photo')).response.status,401);
+    assert.equal((await request('/auth/register', { method: 'POST', body: {} })).response.status, 404);
+    assert.equal((await request('/auth/login', { method: 'POST', body: { login, password: 'wrong' } })).response.status, 401);
+    assert.equal((await request('/auth/login', { method: 'POST', body: {}, headers: { Origin: 'https://outside.invalid' } })).response.status, 403);
+    assert.equal((await request('/auth/login', { method: 'POST', body: { login: {}, password: 'x' } })).response.status, 400);
+    const admin = await request('/auth/login', { method: 'POST', body: { login: process.env.ADMIN_LOGIN, password: process.env.ADMIN_PASSWORD, remember: true } });
+    assert.equal(admin.response.status, 201);
+    assert.equal(admin.data.user.role, 'admin');
+    assert.equal(admin.data.user.password_hash, undefined);
+    assert.match(admin.response.headers.get('set-cookie'), /HttpOnly/);
+    assert.match(admin.response.headers.get('set-cookie'), /SameSite=Lax/);
+    assert.match(admin.response.headers.get('set-cookie'), /Max-Age=/);
+    adminCookie = cookieOf(admin.response);
+    const member = { name: 'Verificação temporária', login, password: 'qa-' + randomUUID(), role: 'user' };
+    const created = await request('/users', { method: 'POST', cookie: adminCookie, body: member });
+    assert.equal(created.response.status, 201);
+    assert.equal(created.data.user.role, 'user');
+    assert.equal(created.data.user.password_hash, undefined);
+    assert.equal((await request('/users', { method: 'POST', cookie: adminCookie, body: member })).response.status, 409);
+    const signedIn = await request('/auth/login', { method: 'POST', body: member });
+    assert.equal(signedIn.response.status, 201);
+    assert.doesNotMatch(signedIn.response.headers.get('set-cookie'), /Max-Age=/);
+    memberCookie = cookieOf(signedIn.response);
+    assert.equal((await request('/auth/me', { cookie: memberCookie })).data.user.login, login);
+    assert.equal((await request('/products', { cookie: memberCookie })).response.status, 200);
+    assert.equal((await request('/movements', { cookie: memberCookie })).response.status, 200);
+    assert.equal((await request('/colors', { cookie: memberCookie })).response.status, 200);
+    assert.equal((await request('/brands', { cookie: memberCookie })).response.status, 200);
+    assert.equal((await request('/finance/statement', { cookie: memberCookie })).response.status, 200);
+    assert.equal((await request('/finance/users', { cookie: memberCookie })).response.status, 200);
+    assert.equal((await request('/finance/activity', { cookie: memberCookie })).response.status, 200);
+    assert.equal((await request('/finance/transactions', {method:'POST', cookie:memberCookie,body:{}})).response.status,400);
+    const knownColor = await request('/colors', { method: 'POST', cookie: memberCookie, body: { name: 'Preto' } });
+    assert.equal(knownColor.response.status, 201);
+    assert.equal(knownColor.data.item.name, 'Preto');
+    assert.equal((await request('/users', { cookie: memberCookie })).response.status, 403);
+    assert.equal((await request('/users', { method: 'POST', cookie: memberCookie, body: { ...member, role: 'admin' } })).response.status, 403);
+    const stored = (await pool.query('SELECT password_hash FROM forma_auth.users WHERE login=$1', [login])).rows[0];
+    assert.match(stored.password_hash, /^scrypt:/);
+    assert.notEqual(stored.password_hash, member.password);
+    const cookieToken = memberCookie.split('=')[1];
+    assert.equal((await pool.query('SELECT 1 FROM forma_auth.sessions WHERE token_hash=$1', [cookieToken])).rowCount, 0);
+    await request('/auth/logout', { method: 'POST', cookie: memberCookie, body: {} });
+    assert.equal((await request('/auth/me', { cookie: memberCookie })).response.status, 401);
+    assert.equal((await request('/products', { cookie: memberCookie })).response.status, 401);
+  } finally {
+    if (adminCookie) await request('/auth/logout', { method: 'POST', cookie: adminCookie, body: {} });
+    if (memberCookie) await request('/auth/logout', { method: 'POST', cookie: memberCookie, body: {} });
+    await pool.query('DELETE FROM forma_auth.users WHERE login=$1', [login]);
+    await pool.query("DELETE FROM forma_finance.activity_log WHERE entity='users' AND coalesce(after_data->>'login',before_data->>'login')=$1",[login]);
+    await pool.end();
+  }
+});

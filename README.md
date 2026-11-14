@@ -1,94 +1,119 @@
-# forma — Mockup Studio
+# Infinity — Sistema da loja
 
-Gerador de mockups de canecas em 3D, feito com TypeScript, Three.js e Vite. A arte é aplicada com coordenadas UV ao corpo curvo da caneca; o interior e a alça continuam em cerâmica. O encaixe inicial e o controle de escala preservam as proporções da imagem usando as dimensões físicas da superfície; o ajuste de altura permite esticar só o sentido vertical.
+Sistema de gestão de canecas, camisetas e capinhas, com identidade em preto e branco e interface pensada primeiro para o celular.
 
-## Abrir no Windows
+## Começar
 
-Dê dois cliques em **INICIAR.cmd**. O site abre em **http://127.0.0.1:5173**. Mantenha a janela do terminal aberta enquanto usa o estúdio. A primeira instalação precisa de internet e Node.js 24 LTS. As dependências já estão instaladas nesta pasta.
-
-Para usar o **Live Server do VS Code**, abra **dist/index.html** com **Open with Live Server**. Com a pasta do projeto como raiz, o endereço é **http://127.0.0.1:5500/dist/index.html**. O `index.html` da pasta principal precisa do Vite. Depois de alterar o código, execute `npm.cmd run build` para atualizar `dist`.
-
-Ou execute no terminal, dentro da pasta do projeto:
+Use Node.js 24 LTS. Na pasta do projeto:
 
 ```powershell
 npm.cmd ci
 npm.cmd run dev
 ```
 
-## Criar um mockup
+Abra **http://localhost:5173**. No Windows, também é possível abrir **INICIAR.cmd**. O Next atende na porta 5173 e encaminha as chamadas à API Nest, na porta 3001. A API fica vinculada a `127.0.0.1` e não precisa ser exposta publicamente. Para abrir pelo celular na mesma rede, configure `APP_ORIGIN` com a origem completa do computador (por exemplo, `http://192.168.1.10:5173`).
 
-1. O estúdio abre com canecas brancas sem estampa. Envie uma arte PNG, JPG, WebP ou SVG, ou arraste o arquivo para a área de upload. Limite de 20 MB. **Remover arte** deixa a caneca vazia, mantendo a cor selecionada; **Recomeçar** restaura o estado inicial.
-2. Em **Ajustar a arte**, ajuste escala e posição. **Altura da estampa** aumenta ou reduz somente a dimensão vertical, mantendo a largura e a distância da alça. **Preencher altura da caneca** centraliza verticalmente a estampa e cobre toda a lateral, do topo à base. **Escala** continua ampliando as duas dimensões na mesma proporção. **Arte contínua ao redor da caneca**, a opção inicial, aplica uma única imagem à superfície em 360°. **Repetir na frente e no verso** permite repetir uma marca nos dois lados.
-3. Escolha **Frente e verso**, **Individual** ou **Detalhe**. No primeiro enquadramento, as duas canecas têm exatamente o mesmo tamanho, altura e profundidade, com ângulos separados por 180°. Elas compartilham a mesma textura: girar 180° revela o verso na esquerda e a frente na direita. Arraste a visualização para orbitar e use a roda do mouse para aproximar. O botão de restaurar câmera volta ao ângulo inicial, mantendo seus ajustes de giro.
-4. Em **A cena**, escolha **Branca** ou **Preta** em **Cor da caneca**. Corpo, interior e alça mudam juntos nas duas vistas, sem mover a estampa. Escolha fundo estúdio, areia, sálvia ou transparente; formato quadrado, horizontal ou retrato; e resolução de 1080, 2400 ou 3600 px no lado maior.
-5. Clique em **Baixar mockup**. O PNG é renderizado na resolução escolhida, sem interface e sem marca d'água. O fundo transparente exporta apenas as canecas, sem piso nem sombras.
+O `.env` local está configurado para o banco informado. Em outra instalação, copie `.env.example` para `.env` e preencha os dados privados. Senhas e conexão com o banco nunca usam variáveis `NEXT_PUBLIC_*` e não são incluídas no navegador.
 
-PNG com transparência funciona bem para nomes, logotipos e ilustrações. Para uma estampa panorâmica, uma proporção próxima de **21 × 9 cm** é um bom ponto de partida. Artes em SVG devem incluir largura e altura e não depender de recursos externos. Fontes convertidas em curvas preservam o resultado entre navegadores.
+## Login e equipe
 
-Na caneca preta, as áreas transparentes deixam a cerâmica aparecer; o branco presente na imagem permanece como tinta branca. A cor selecionada também é aplicada ao PNG baixado, inclusive sem estampa.
+- A tela inicial é o login, sem cadastro público.
+- O administrador inicial usa o usuário **diogo** e a senha definida pelo proprietário no `.env` privado.
+- Apenas administradores podem listar e criar usuários em **Usuários**, inclusive pela API.
+- Contas da equipe têm acesso ao estoque, ao financeiro e ao Studio 3D.
+- Senhas são armazenadas com scrypt e salt aleatório. Os cookies de sessão são HttpOnly, com SameSite=Lax; apenas o hash do token é salvo no banco.
+- A sessão comum vence em 12 horas e o cookie é de sessão do navegador. **Manter conectado** habilita cookie persistente por 30 dias. Sair revoga a sessão no banco.
+- Tentativas de acesso são limitadas por usuário e IP em janelas de 15 minutos, com contadores persistentes no PostgreSQL.
 
-Fundos pretos neutros da imagem se integram automaticamente à cerâmica preta, com os mesmos reflexos, para evitar um retângulo chapado ao redor da estampa. Tons quase pretos passam por uma transição suave; as tintas coloridas, inclusive vermelho e azul escuros, continuam preservadas. A prévia e o PNG usam o mesmo tratamento.
+A inicialização cria o esquema `forma_auth` e o administrador somente se esse login ainda não existir. Reiniciar não redefine senhas nem substitui usuários. Depois da primeira inicialização, `ADMIN_PASSWORD` pode ser removida do ambiente; a conta continua no banco. Para preparar o banco sem iniciar o aplicativo:
 
-O modelo é uma simulação para apresentação, não um gabarito de impressão. A arte circula pela superfície inteira, inclusive quando deslocada através da emenda da textura. O encaixe inicial preserva a proporção e pode deixar áreas sem estampa; ajuste escala e posição se quiser ampliar a cobertura. O controle de altura remove as faixas sem estampa no topo e na base externa sem mudar a margem lateral próxima da alça. O interior e a borda interna continuam em cerâmica. Artes com margens transparentes ou brancas no próprio arquivo podem precisar de mais altura para ocupar a lateral. Para produção, use as medidas do fornecedor.
+```powershell
+npm.cmd run db:migrate
+```
 
-As cores sRGB da imagem são preservadas nas áreas frontais. O brilho e a exposição da cerâmica são calculados separadamente da estampa, com escurecimento neutro e suave nas laterais para manter a curvatura sem desbotar as cores. PNGs usam o mesmo tratamento de cor da prévia. Durante o giro, a separação se ajusta para dar espaço às alças voltadas para o centro; a escala das duas canecas permanece idêntica.
+## Organização e escopo desta etapa
 
-## Hospedar em um servidor
+- `apps/web`: Next.js App Router, login, início, menu responsivo e gestão de acessos.
+- `apps/api/src`: entrada Nest, autenticação, sessões, validações e permissões administrativas.
+- `server`: regras e transações financeiras existentes, reaproveitadas dentro do Nest.
+- `src`: estúdio Three.js e interface de produtos, compras e estoque preservados.
 
-Não é necessário banco de dados, API nem serviço de renderização. Toda a geração acontece no navegador. Artes enviadas não saem do computador e não são persistidas ao recarregar a página. A fonte e o modelo são recursos locais, sem CDN em tempo de execução.
+A migração é progressiva: o sistema principal e as novas telas usam Next; estoque, compras e Studio 3D continuam no módulo Vite existente, integrado em telas protegidas dentro do sistema. A API de entrada já é Nest. A conversão interna dessas telas e das rotas financeiras para componentes e serviços nativos pode ser feita nas próximas etapas, preservando os dados existentes.
 
-Gere a versão de produção:
+O menu **Studio 3D** abre a tela de criação de mockups. Upload, ajustes, giro, troca da cor da caneca e exportação PNG continuam no navegador, sem enviar a arte ao servidor. As cores da arte e da caneca são preservadas; apenas a interface segue a identidade monocromática.
+
+No menu **Estoque**, as abas superiores são **Produtos** e **Histórico**. As duas permitem cadastrar produtos; os cards oferecem **Entrada** e **Venda**. Registre entradas com embalagem, quantidade por embalagem, custo total e data da compra. Cada entrada calcula quantidade e custo unitário, preserva os dados do produto no momento da compra e grava estoque e compra na mesma transação. Repetir uma requisição não duplica estoque. O histórico mostra último custo e média ponderada. O menu **Financeiro** reúne o extrato e os demais lançamentos de dinheiro em uma tela própria.
+
+### Categorias, cores e marcas
+
+Produtos para revenda usam uma das três categorias: **Canecas**, **Camisetas** ou **Acessórios para celular**. A categoria também filtra as listas de produtos e estoque. Cadastros antigos continuam disponíveis como **Sem categoria**, para classificação manual; insumos para uso e consumo podem continuar sem categoria.
+
+Ao selecionar qualquer categoria, aparece o campo **Cor**, opcional, com a opção **Sem cor**. Todas as categorias usam o mesmo catálogo de cores. As cores iniciais são Branco, Preto, Azul, Vermelho, Verde, Amarelo, Rosa, Roxo, Cinza, Bege, Marrom, Laranja e Transparente. **Camisetas** também mostra **Marca**, opcional, com Nike e Adidas já cadastradas.
+
+Use **Cadastrar** ao lado de Cor ou Marca para digitar um nome e cadastrá-lo no próprio formulário. A nova opção já fica selecionada, sem perder os dados do produto. Repetir um nome, ignorando maiúsculas e espaços nas pontas, reutiliza a opção existente. Trocar de camiseta para outra categoria limpa a marca.
+
+O mesmo nome de produto pode ser usado em variações diferentes de categoria, cor e marca, cada uma com seu próprio saldo. A lista, o seletor de entradas e os detalhes exibem essas informações. Novas compras guardam uma cópia da categoria, cor e marca da época; editar o produto não altera seu histórico. Compras antigas não recebem atributos retroativos.
+
+Esta etapa entrega login, contas e a estrutura de navegação, preservando os controles anteriores. Contas a pagar/receber, metas, pontos e recompensas ainda não foram implementados. A tela de início orienta os primeiros passos sem apresentar vendas, saldos ou progresso fictícios.
+
+## Verificação
 
 ```powershell
 npm.cmd run build
+npm.cmd test
 ```
 
-Publique **o conteúdo da pasta dist/** no diretório público do seu servidor (Nginx, Apache, hospedagem compartilhada ou serviço de arquivos estáticos). Os caminhos são relativos, então também é possível hospedar em uma subpasta. Sirva por HTTP ou HTTPS, não abrindo o HTML diretamente pelo explorador de arquivos.
-
-Confira a compilação localmente:
+Com o Next e o Nest iniciados e o `.env` configurado:
 
 ```powershell
-npm.cmd run preview
+npm.cmd run test:auth
+npm.cmd run test:password
+npm.cmd run test:web
+npm.cmd run test:integration
+npm.cmd run test:finance
 ```
 
-A prévia de produção abre em **http://127.0.0.1:4173**.
+Os testes de autenticação conferem hashes, login, cookies, autorização, criação exclusiva pelo administrador, proteção da API e revogação da sessão. Um usuário temporário é criado e removido ao final. O teste de concorrência cria um produto temporário, disputa sua última unidade com duas vendas simultâneas e remove seus registros ao final. Os testes web verificam via HTTP os redirecionamentos, o proxy, as páginas e os arquivos protegidos do módulo 3D. Não substituem a conferência visual em dispositivos reais. O teste financeiro usa transação revertida ao final.
 
-## Instalar como app no Android
+O comando `test:browser` e os testes manuais antigos verificam o módulo financeiro isolado e o renderizador; não cobrem o novo login Next. A integração autenticada não registra o service worker antigo: páginas e dados da loja não são armazenados no cache offline.
 
-O site agora é uma **PWA**, instalável pelo navegador. O app usa uma caneca branca sobre fundo verde, abre em uma janela própria e mantém upload de arte, visualização 3D e download de PNG. O ícone também aparece na aba do navegador e no cabeçalho.
+## Produção
 
-1. Publique o conteúdo de `dist/` em um servidor com **HTTPS**.
-2. No Android, abra o endereço publicado no Chrome e toque em **Instalar app**. Confirme a instalação oferecida pelo navegador.
-3. Se a opção automática ainda não estiver disponível, use **⋮ → Instalar app** ou **Adicionar à tela inicial**. O botão do site também mostra essas instruções.
-4. Abra **forma** pela tela inicial. Depois do primeiro carregamento completo com internet, o estúdio funciona offline com arquivos do próprio aparelho. A arte continua temporária e não é salva ao fechar ou recarregar.
-
-A instalação é feita pelo navegador; não há APK para baixar nem publicação na Play Store nesta versão. Para conferir no computador, use a versão compilada no Live Server (`/dist/index.html`) ou `npm.cmd run preview`. HTTP em `localhost`/`127.0.0.1` é permitido para testes; abrir pelo IP da rede em HTTP no celular não habilita a instalação completa. [Requisitos de instalação do Chrome](https://web.dev/articles/install-criteria).
-
-Com o Live Server aberto, `/tests/pwa-check.html` confere os ícones e os arquivos offline no navegador, depois de abrir o estúdio uma vez. `/tests/mobile-check.html` permite conferir a interface e as instruções em uma largura de 390 px.
-
-Cada compilação gera `dist/sw.js` com a versão e a lista dos arquivos locais. Novas versões aguardam as janelas do app fecharem para preservar o mockup aberto. Subpastas usam seus próprios caches. O cache inclui interface, fonte e ícones, sem guardar as artes enviadas. Sirva `sw.js` sem cache prolongado no servidor. Os ícones PNG estão em `public/icons/`; o original vetorial é `public/favicon.svg` e o script `scripts/generate-icons.ps1` gera as versões para Android.
-
-Também há um Dockerfile:
-
-```sh
-docker build -t forma-mockup .
-docker run --rm -p 8080:80 forma-mockup
+```powershell
+npm.cmd ci
+npm.cmd run build
+npm.cmd start
 ```
 
-Abra **http://localhost:8080**. O Dockerfile usa Nginx para servir os arquivos estáticos; o Node.js só é necessário para compilar.
+Configure `APP_ORIGIN` com a URL HTTPS pública e `COOKIE_SECURE=true`. O sistema exige cookies seguros em produção. Use um proxy HTTPS para o Next, mantendo a API Nest privada. A conexão PostgreSQL usa as variáveis privadas do servidor. As tabelas financeiras ficam no esquema `forma_finance`; as de acesso ficam em `forma_auth`. Migrações adicionam suas tabelas sem apagar dados existentes.
 
-## Requisitos e desenvolvimento
+Também há um Dockerfile com as duas aplicações:
 
-- Node.js 24 LTS e npm para desenvolvimento/compilação.
-- Chrome, Edge, Firefox ou Safari atualizado com WebGL 2 e aceleração de hardware.
-- Exportações grandes dependem dos limites gráficos do dispositivo. Se 3600 px falhar, escolha uma resolução menor.
-- `src/scene.ts`: geometria das canecas, iluminação, câmeras e renderização/exportação.
-- `src/artwork.ts`: tamanho físico e posicionamento da arte na textura.
-- `src/print-material.ts`: tratamento de cor da estampa separado da iluminação da cerâmica.
-- `src/mug-layout.ts`: posições, escala idêntica e ângulos de frente e verso.
-- `src/main.ts`: interface e operações de arquivo.
-- `src/style.css`: aparência e versão responsiva.
+```powershell
+docker build -t infinity-store .
+docker run --rm --env-file .env -e WEB_PORT=8080 -e COOKIE_SECURE=true -e APP_ORIGIN=https://sua-loja.exemplo -p 8080:8080 infinity-store
+```
 
-Execute `npm.cmd test` para verificar proporção física, encaixe, dimensões idênticas e giro de frente e verso. Com o servidor de desenvolvimento aberto, acesse `/tests/render-check.html` para medir as cores dos pixels no WebGL e no PNG, conferir a escala projetada, a troca dos lados ao girar 180°, a continuidade da emenda em 360° e a ausência de contorno no fundo branco da arte em prévias de 360 e 600 px. A verificação também cobre cores, transparência e tinta branca na caneca preta, remoção da estampa e exportação da cerâmica preta. A integração do fundo preto é comparada à caneca sem estampa em 18 combinações de tom, tamanho e giro, incluindo a exportação e a preservação de tintas vermelhas e azuis escuras. A pasta `exemplos/` contém imagens geradas pelo estúdio.
+Use um arquivo de ambiente próprio para produção. O `.env` é ignorado pelo Git e pelo Docker. O Nest permanece na porta interna 3001 e o Next atende na porta 8080 do container.
 
-O modelo é gerado pelo código, sem arquivo 3D externo. Para acrescentar outros produtos, crie geometrias e áreas UV correspondentes em `scene.ts`.
+### Registrar entradas e vendas
+
+As ações abrem formulários sobre a tela atual, sem abas separadas de Entrada ou Estoque. Na venda, escolha um produto para revenda, quantidade, valor total e data; cliente e observações são opcionais. O formulário mostra o saldo disponível. Salvar cria a venda e baixa o estoque na mesma transação. A API impede estoque insuficiente e unidades fracionadas quando a unidade é `un`. Repetir a mesma requisição não duplica a venda; vendas concorrentes bloqueiam o produto durante a conferência do saldo.
+
+O Histórico reúne entradas e vendas, com totais separados de compras e vendas, filtro por tipo, produto e datas e botões para repetir uma operação sobre o produto. Cores, marcas e nome são preservados em cada movimentação. Os custos de compra continuam baseados nas entradas. O registro de venda é um controle da loja; não representa cobrança ou recebimento financeiro integrado.
+
+### Financeiro
+
+O menu Financeiro tem uma tela Next própria, com abas Extrato, Compras, Sócios, Despesas e Atividades. Compras e vendas antigas e novas compõem o extrato automaticamente, sem duplicar registros. O controle considera essas operações pagas na data informada; não há integração bancária ou contas a pagar/receber. Despesas, pagamentos a usuários ativos, outras entradas e ajustes de saldo são registrados com valor em centavos, data, observação opcional e responsável. O nome do sócio fica preservado no pagamento.
+
+O extrato mostra saldo anterior, entradas e saídas no período, saldo final, saldo acumulado por lançamento e saldo atual até hoje (excluindo datas futuras). O filtro de tipo restringe a lista; os saldos gerais continuam considerando todos os tipos. O saldo parte de zero: para incluir valores anteriores, registre a diferença em um ajuste, considerando as compras e vendas já incluídas. Saídas e saldos negativos aparecem em vermelho.
+
+As alterações em produtos, cores, marcas, fotos, compras, vendas, estoque, lançamentos e usuários geram auditoria na mesma transação da operação. Alterações de senha registram o evento, nunca o hash ou a senha. A identidade do responsável usa configuração local à transação, sem contaminar conexões do pool. O histórico de atividades começa na ativação da migração; operações financeiras anteriores aparecem sem responsável identificado. Usuários autenticados têm acesso às informações; criação de usuários e troca de senha alheia continuam exclusivas do administrador. Não há edição ou exclusão de lançamentos pela API: correções podem ser registradas como ajuste com descrição e observação, preservando o histórico.
+
+O teste `test:finance` valida os saldos, datas futuras, integração com estoque, seleção de sócio, auditoria e reenvio sem duplicação no PostgreSQL real, revertendo todos os dados ao final.
+
+### Configurações da conta
+
+Clique no nome ou avatar do cabeçalho e escolha **Alterar senha**. Cada usuário altera a própria senha informando a senha atual, a nova senha (8 a 256 caracteres) e a confirmação. Administradores também podem selecionar outro usuário ativo; nesse caso, confirmam com a própria senha de administrador, sem precisar saber a senha antiga da outra pessoa.
+
+Ao salvar, todas as sessões da conta alterada são encerradas. Na troca da própria senha, o sistema volta ao login e informa que é necessário entrar novamente. Ao alterar a senha de outra pessoa, o administrador continua conectado. As permissões são verificadas na API, as senhas continuam armazenadas apenas como hash scrypt e as tentativas são limitadas por conta. O teste `test:password` usa contas temporárias, verifica as permissões e a concorrência com o login, e remove essas contas ao final, preservando a senha do administrador real.

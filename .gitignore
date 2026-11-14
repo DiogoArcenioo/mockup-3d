@@ -3,3 +3,11 @@ dist/
 .playwright/
 test-results/
 *.log
+.env
+.env.*
+!.env.example
+.npm-cache/
+.next/
+apps/api/dist/
+next-env.d.ts
+*.tsbuildinfo

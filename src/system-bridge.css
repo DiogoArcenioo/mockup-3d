@@ -1,0 +1,21 @@
+/* Shared brand treatment inside the preserved finance and 3D modules. */
+:root{--green:#171717;--green-dark:#050505;--green-light:#eee;--accent:#171717;--ink:#171717;--muted:#777;--paper:#fafafa}
+body{background:#fafafa}
+.f-primary,.download-button{background:#171717!important;border-color:#171717!important;color:white!important}
+.f-primary:hover,.download-button:hover{background:#333!important}
+.f-nav a.active,.f-bottom-nav a.active{color:#171717!important;background:#eee!important}
+.f-eyebrow,.eyebrow,.brand-dot,.f-brand>span{color:#777!important}
+.f-studio{background:#f3f3f3!important;border-color:#ddd!important;color:#171717!important}
+.f-connection.online{color:#444!important}
+.f-metric-icon{color:#333!important;background:#eee!important}
+.system-embedded .f-header,.system-embedded .f-footer,.system-embedded .f-bottom-nav{display:none!important}
+.system-embedded .f-shell{display:block;min-height:100dvh}
+.system-embedded .f-sidebar{display:block;position:sticky;top:0;z-index:20;padding:10px 20px;border:0;border-bottom:1px solid #e5e5e5;background:#fff}
+.system-embedded .f-side-label,.system-embedded .f-side-note,.system-embedded .f-studio{display:none}
+.system-embedded .f-nav{display:flex;flex-direction:row;gap:5px;justify-content:center}
+.system-embedded .f-nav a{padding:10px 14px;gap:7px;min-height:42px;font-size:11px}
+.system-embedded .f-nav a::after{display:none}
+.system-embedded .f-main{padding:25px 24px 30px}
+.system-embedded .header{height:52px;padding:0 24px;justify-content:flex-end}
+.system-embedded .header>.brand,.system-embedded .brand-divider,.system-embedded .brand-caption,.system-embedded .local-status{display:none}
+@media(max-width:700px){.system-embedded .f-sidebar{padding:7px 9px}.system-embedded .f-nav a{padding:10px 9px;font-size:10px;gap:5px}.system-embedded .f-nav a .icon{width:16px;height:16px}.system-embedded .f-main{padding:24px 18px 30px}}

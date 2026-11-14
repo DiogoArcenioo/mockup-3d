@@ -4,3 +4,7 @@ dist
 test-results
 .playwright
 *.log
+.env
+.env.*
+.npm-cache
+.next
