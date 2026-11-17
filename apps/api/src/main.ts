@@ -57,7 +57,7 @@ async function bootstrap() {
   const auth = app.get(AuthService);
   const finance = createApp(pool, { password: '', externalAuth: true, static: false });
   app.use((req: Request, res: Response, next: NextFunction) => {
-    if (!/^\/api\/(finance|products|colors|brands|entries|sales|movements|summary|health)(\/|\?|$)/.test(req.originalUrl)) return next();
+    if (!/^\/api\/(finance|products|colors|brands|entries|sales|movements|summary|health|orders)(\/|\?|$)/.test(req.originalUrl)) return next();
     void auth.current(req).then(user => { Object.assign(req,{actor:user}); finance(req, res, next); }).catch(error => {
       const status = error instanceof HttpException ? error.getStatus() : 503;
       res.status(status).json({ error: status === 401 ? 'Sua sessão expirou. Entre novamente.' : 'Não foi possível acessar o servidor.' });

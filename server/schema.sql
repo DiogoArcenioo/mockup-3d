@@ -104,3 +104,58 @@ CREATE TABLE IF NOT EXISTS forma_finance.product_photos (
   content bytea NOT NULL CHECK (octet_length(content)>0 AND octet_length(content)<=3145728),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
+
+-- Preços: o cadastro guarda o custo mais recente e o preço de venda atual; cada variação fica em sua própria tabela.
+ALTER TABLE forma_finance.products ADD COLUMN IF NOT EXISTS sale_price_cents bigint CHECK (sale_price_cents IS NULL OR (sale_price_cents>=0 AND sale_price_cents<=10000000000));
+ALTER TABLE forma_finance.products ADD COLUMN IF NOT EXISTS cost_price numeric(20,6) CHECK (cost_price IS NULL OR cost_price>=0);
+CREATE TABLE IF NOT EXISTS forma_finance.product_cost_history (
+  id uuid PRIMARY KEY,
+  product_id uuid NOT NULL REFERENCES forma_finance.products(id),
+  entry_id uuid UNIQUE REFERENCES forma_finance.entries(id),
+  source varchar(10) NOT NULL CHECK (source IN ('entry','register')),
+  unit_cost numeric(20,6) NOT NULL CHECK (unit_cost>=0),
+  actor_name varchar(100) NOT NULL DEFAULT coalesce(nullif(current_setting('infinity.actor_name',true),''),''),
+  created_at timestamptz NOT NULL DEFAULT clock_timestamp()
+);
+CREATE INDEX IF NOT EXISTS product_cost_history_product ON forma_finance.product_cost_history(product_id,created_at DESC);
+CREATE TABLE IF NOT EXISTS forma_finance.product_sale_prices (
+  id uuid PRIMARY KEY,
+  product_id uuid NOT NULL REFERENCES forma_finance.products(id),
+  price_cents bigint NOT NULL CHECK (price_cents>=0 AND price_cents<=10000000000),
+  previous_cents bigint,
+  actor_name varchar(100) NOT NULL DEFAULT coalesce(nullif(current_setting('infinity.actor_name',true),''),''),
+  created_at timestamptz NOT NULL DEFAULT clock_timestamp()
+);
+CREATE INDEX IF NOT EXISTS product_sale_prices_product ON forma_finance.product_sale_prices(product_id,created_at DESC);
+-- Entradas anteriores passam a compor o histórico de custo uma única vez.
+INSERT INTO forma_finance.product_cost_history(id,product_id,entry_id,source,unit_cost,actor_name,created_at)
+SELECT gen_random_uuid(),e.product_id,e.id,'entry',e.unit_cost,'',e.created_at FROM forma_finance.entries e
+ON CONFLICT (entry_id) DO NOTHING;
+UPDATE forma_finance.products p SET cost_price=l.unit_cost
+FROM (SELECT DISTINCT ON (product_id) product_id,unit_cost FROM forma_finance.product_cost_history ORDER BY product_id,created_at DESC,id DESC) l
+WHERE l.product_id=p.id AND p.cost_price IS NULL;
+
+-- Venda com carrinho: um pedido reúne os itens (linhas de sales) e quem vendeu.
+CREATE TABLE IF NOT EXISTS forma_finance.sale_orders (
+  id uuid PRIMARY KEY,
+  request_id uuid NOT NULL UNIQUE,
+  sold_at date NOT NULL,
+  customer varchar(160) NOT NULL DEFAULT '',
+  payment_method varchar(10) NOT NULL DEFAULT '' CHECK (payment_method IN ('','pix','cash','card')),
+  notes varchar(1000) NOT NULL DEFAULT '',
+  summary varchar(200) NOT NULL,
+  item_count integer NOT NULL CHECK (item_count>0),
+  list_total_cents bigint NOT NULL CHECK (list_total_cents>=0),
+  total_cents bigint NOT NULL CHECK (total_cents>=0 AND total_cents<=10000000000),
+  seller_id uuid,
+  seller_name varchar(100) NOT NULL DEFAULT '',
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS sale_orders_date ON forma_finance.sale_orders(sold_at DESC,created_at DESC);
+ALTER TABLE forma_finance.sales ADD COLUMN IF NOT EXISTS order_id uuid REFERENCES forma_finance.sale_orders(id);
+ALTER TABLE forma_finance.sales ADD COLUMN IF NOT EXISTS list_price_cents bigint;
+ALTER TABLE forma_finance.sales ADD COLUMN IF NOT EXISTS unit_cost numeric(20,6);
+CREATE INDEX IF NOT EXISTS sales_order ON forma_finance.sales(order_id);
+-- Itens de cortesia podem sair por R$ 0,00.
+ALTER TABLE forma_finance.sales DROP CONSTRAINT IF EXISTS sales_total_cents_check;
+ALTER TABLE forma_finance.sales ADD CONSTRAINT sales_total_cents_check CHECK (total_cents>=0 AND total_cents<=10000000000);

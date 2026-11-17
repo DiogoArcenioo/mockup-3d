@@ -4,11 +4,13 @@ import {randomUUID} from 'node:crypto';
 import express from 'express';
 import {createApp} from '../server/app.mjs';
 import {createPool} from '../server/db.mjs';
+import {readFile} from 'node:fs/promises';
 
 test('extrato real: saldos, compras/vendas automáticas, sócios, despesas, auditoria e reenvio sem duplicidade',async()=>{
   const pool=createPool(),client=await pool.connect();let server;
   try{
     await client.query('BEGIN');
+    for(const file of ['../server/schema.sql','../apps/api/src/schema.sql','../server/cashbook-schema.sql'])await client.query(await readFile(new URL(file,import.meta.url),'utf8'));
     const actor={id:randomUUID(),name:'Teste financeiro revertido'};
     await client.query(`INSERT INTO forma_auth.users(id,name,login,password_hash,role) VALUES($1,$2,$3,'test-disabled','user')`,[actor.id,actor.name,'cash-'+randomUUID().slice(0,30)]);
     const wrapper={async query(sql,values){

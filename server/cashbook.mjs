@@ -50,7 +50,7 @@ export function registerCashbook(app,pool) {
       coalesce(-sum(amount_cents) FILTER(WHERE occurred_at BETWEEN $1::date AND $2::date AND amount_cents<0),0) outgoing,
       coalesce(sum(amount_cents) FILTER(WHERE occurred_at<=(now() AT TIME ZONE 'America/Sao_Paulo')::date),0) current FROM ledger),
     page_rows AS (SELECT s.*,coalesce(a.actor_name,'Registro anterior / responsável não informado') actor_name FROM selected s
-      LEFT JOIN LATERAL(SELECT actor_name FROM forma_finance.activity_log WHERE entity_id=s.id AND entity IN ('entries','sales','cash_transactions') AND operation='INSERT' ORDER BY id LIMIT 1) a ON true
+      LEFT JOIN LATERAL(SELECT actor_name FROM forma_finance.activity_log WHERE entity_id=s.id AND entity IN ('entries','sales','cash_transactions','sale_orders') AND operation='INSERT' ORDER BY id LIMIT 1) a ON true
       ORDER BY occurred_at DESC,created_at DESC,id DESC LIMIT 20 OFFSET $4)
     SELECT (SELECT row_to_json(totals) FROM totals) totals,(SELECT count(*) FROM selected) count,
       coalesce((SELECT jsonb_agg(to_jsonb(p)||jsonb_build_object('occurred_at',p.occurred_at::text) ORDER BY p.occurred_at DESC,p.created_at DESC,p.id DESC) FROM page_rows p),'[]') items,

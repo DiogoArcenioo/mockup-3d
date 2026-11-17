@@ -36,7 +36,7 @@ BEGIN
   RETURN coalesce(NEW,OLD);
 END $$;
 DO $$ DECLARE tab text; BEGIN
-  FOREACH tab IN ARRAY ARRAY['products','product_colors','product_brands','product_photos','entries','sales','stock_movements','cash_transactions'] LOOP
+  FOREACH tab IN ARRAY ARRAY['products','product_colors','product_brands','product_photos','entries','sales','stock_movements','cash_transactions','sale_orders','product_sale_prices','product_cost_history'] LOOP
     EXECUTE format('CREATE OR REPLACE TRIGGER infinity_activity AFTER INSERT OR UPDATE OR DELETE ON forma_finance.%I FOR EACH ROW EXECUTE FUNCTION forma_finance.record_activity()',tab);
   END LOOP;
   IF to_regclass('forma_auth.users') IS NOT NULL THEN
@@ -48,5 +48,6 @@ CREATE OR REPLACE VIEW forma_finance.cashbook AS
 SELECT e.id,'purchase'::text kind,e.purchased_at occurred_at,-e.total_cents amount_cents,
   ('Compra · '||e.product_name)::text description,e.supplier::text counterparty,e.notes::text notes,e.created_at,
   null::uuid recipient_id FROM forma_finance.entries e
-UNION ALL SELECT s.id,'sale',s.sold_at,s.total_cents,'Venda · '||s.product_name,s.customer,s.notes,s.created_at,null::uuid FROM forma_finance.sales s
+UNION ALL SELECT s.id,'sale',s.sold_at,s.total_cents,'Venda · '||s.product_name,s.customer,s.notes,s.created_at,null::uuid FROM forma_finance.sales s WHERE s.order_id IS NULL
+UNION ALL SELECT o.id,'sale',o.sold_at,o.total_cents,'Venda · '||o.summary,o.customer,o.notes,o.created_at,null::uuid FROM forma_finance.sale_orders o
 UNION ALL SELECT c.id,c.kind,c.occurred_at,c.amount_cents,c.description,coalesce(c.recipient_name,''),c.notes,c.created_at,c.recipient_id FROM forma_finance.cash_transactions c;

@@ -57,3 +57,35 @@ export function saleInput(body = {}) {
   if (!Number.isSafeInteger(body.totalCents) || body.totalCents<=0 || body.totalCents>10000000000) throw new ValidationError('Informe o valor total da venda, maior que zero.');
   return { productId:uuid(body.productId),requestId:uuid(body.requestId),soldAt:dateInput(body.soldAt,'Data da venda'),quantity:amount,totalCents:body.totalCents,customer:textField(body.customer,'Cliente',160),notes:textField(body.notes,'Observações',1000) };
 }
+
+export function cents(value, label, allowNull = false) {
+  if (allowNull && (value === null || value === undefined || value === '')) return null;
+  if (!Number.isSafeInteger(value) || value < 0 || value > 10000000000) throw new ValidationError(`${label}: informe um valor válido.`);
+  return value;
+}
+// Custos unitários podem ter frações de centavo (ex.: caixa de R$ 100,00 com 7 unidades).
+export function unitCost(value, label = 'Preço de custo', allowNull = true) {
+  if (allowNull && (value === null || value === undefined || value === '')) return null;
+  if (!['number', 'string'].includes(typeof value) || !/^\d+(\.\d{1,6})?$/.test(String(value))) throw new ValidationError(`${label}: informe um valor válido.`);
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 0 || n > 100000000) throw new ValidationError(`${label} fora do limite permitido.`);
+  return n;
+}
+export const PAYMENTS = ['', 'pix', 'cash', 'card'];
+export function orderInput(body = {}) {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) throw new ValidationError('Dados de venda inválidos.');
+  if (!Array.isArray(body.items) || !body.items.length) throw new ValidationError('Adicione pelo menos um produto ao carrinho.');
+  if (body.items.length > 100) throw new ValidationError('Use até 100 itens por venda.');
+  const items = body.items.map(item => {
+    if (!item || typeof item !== 'object') throw new ValidationError('Item inválido.');
+    const amount = quantity(item.quantity, 'Quantidade');
+    const price = cents(item.unitPriceCents, 'Preço do item');
+    const total = Math.round(price * amount);
+    return { productId: uuid(item.productId), quantity: amount, unitPriceCents: price, totalCents: total };
+  });
+  const totalCents = items.reduce((sum, item) => sum + item.totalCents, 0);
+  if (totalCents > 10000000000) throw new ValidationError('O total da venda passou do limite permitido.');
+  const paymentMethod = body.paymentMethod ?? '';
+  if (!PAYMENTS.includes(paymentMethod)) throw new ValidationError('Forma de pagamento inválida.');
+  return { requestId: uuid(body.requestId), soldAt: dateInput(body.soldAt, 'Data da venda'), customer: textField(body.customer, 'Cliente', 160, true), paymentMethod, notes: textField(body.notes, 'Observações', 1000), items, totalCents };
+}
