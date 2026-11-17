@@ -18,6 +18,10 @@ CREATE TABLE IF NOT EXISTS forma_finance.activity_log (
 );
 CREATE INDEX IF NOT EXISTS activity_log_date ON forma_finance.activity_log(created_at DESC,id DESC);
 CREATE INDEX IF NOT EXISTS activity_log_entity ON forma_finance.activity_log(entity,entity_id,operation);
+-- Cada operação da API recebe um identificador; o log agrupa por ele (uma venda = um evento).
+ALTER TABLE forma_finance.activity_log ADD COLUMN IF NOT EXISTS op_id uuid;
+CREATE INDEX IF NOT EXISTS activity_log_op ON forma_finance.activity_log(op_id);
+ALTER TABLE forma_finance.cash_transactions ADD COLUMN IF NOT EXISTS category varchar(30) NOT NULL DEFAULT '';
 CREATE OR REPLACE FUNCTION forma_finance.record_activity() RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE before_row jsonb; after_row jsonb; target_id uuid; action text := TG_OP;
 BEGIN
@@ -30,13 +34,14 @@ BEGIN
   END IF;
   IF TG_OP='UPDATE' AND before_row=after_row AND action<>'PASSWORD' THEN RETURN NEW; END IF;
   target_id=coalesce(after_row->>'id',after_row->>'product_id',before_row->>'id',before_row->>'product_id')::uuid;
-  INSERT INTO forma_finance.activity_log(entity,entity_id,operation,actor_id,actor_name,before_data,after_data)
+  INSERT INTO forma_finance.activity_log(entity,entity_id,operation,actor_id,actor_name,before_data,after_data,op_id)
   VALUES(TG_TABLE_NAME,target_id,action,nullif(current_setting('infinity.actor_id',true),'')::uuid,
-    coalesce(nullif(current_setting('infinity.actor_name',true),''),'Sistema / responsável não informado'),before_row,after_row);
+    coalesce(nullif(current_setting('infinity.actor_name',true),''),'Sistema / responsável não informado'),before_row,after_row,
+    nullif(current_setting('infinity.op_id',true),'')::uuid);
   RETURN coalesce(NEW,OLD);
 END $$;
 DO $$ DECLARE tab text; BEGIN
-  FOREACH tab IN ARRAY ARRAY['products','product_colors','product_brands','product_photos','entries','sales','stock_movements','cash_transactions','sale_orders','product_sale_prices','product_cost_history'] LOOP
+  FOREACH tab IN ARRAY ARRAY['products','product_colors','product_brands','product_photos','entries','sales','stock_movements','cash_transactions','sale_orders','product_sale_prices','product_cost_history','debtors'] LOOP
     EXECUTE format('CREATE OR REPLACE TRIGGER infinity_activity AFTER INSERT OR UPDATE OR DELETE ON forma_finance.%I FOR EACH ROW EXECUTE FUNCTION forma_finance.record_activity()',tab);
   END LOOP;
   IF to_regclass('forma_auth.users') IS NOT NULL THEN
@@ -47,7 +52,8 @@ END $$;
 CREATE OR REPLACE VIEW forma_finance.cashbook AS
 SELECT e.id,'purchase'::text kind,e.purchased_at occurred_at,-e.total_cents amount_cents,
   ('Compra · '||e.product_name)::text description,e.supplier::text counterparty,e.notes::text notes,e.created_at,
-  null::uuid recipient_id FROM forma_finance.entries e
-UNION ALL SELECT s.id,'sale',s.sold_at,s.total_cents,'Venda · '||s.product_name,s.customer,s.notes,s.created_at,null::uuid FROM forma_finance.sales s WHERE s.order_id IS NULL
-UNION ALL SELECT o.id,'sale',o.sold_at,o.total_cents,'Venda · '||o.summary,o.customer,o.notes,o.created_at,null::uuid FROM forma_finance.sale_orders o
-UNION ALL SELECT c.id,c.kind,c.occurred_at,c.amount_cents,c.description,coalesce(c.recipient_name,''),c.notes,c.created_at,c.recipient_id FROM forma_finance.cash_transactions c;
+  null::uuid recipient_id,null::text paid_by,null::text category FROM forma_finance.entries e
+UNION ALL SELECT s.id,'sale',s.sold_at,s.total_cents,'Venda · '||s.product_name,s.customer,s.notes,s.created_at,null::uuid,null,null FROM forma_finance.sales s WHERE s.order_id IS NULL
+UNION ALL SELECT o.id,'sale',o.sold_at,o.total_cents,'Venda · '||o.summary,o.customer,o.notes,o.created_at,null::uuid,null,null FROM forma_finance.sale_orders o WHERE NOT o.on_credit
+UNION ALL SELECT d.id,'debt_payment',d.paid_at,d.total_cents,'Recebimento · '||d.name,d.name,d.notes,d.paid_registered_at,null::uuid,d.paid_by_name,null FROM forma_finance.debtors d WHERE d.status='paid'
+UNION ALL SELECT c.id,c.kind,c.occurred_at,c.amount_cents,c.description,coalesce(c.recipient_name,''),c.notes,c.created_at,c.recipient_id,null,nullif(c.category,'') FROM forma_finance.cash_transactions c;

@@ -1,6 +1,12 @@
 import { randomUUID } from 'node:crypto';
-import { ValidationError, dateInput, textField, uuid } from './finance.mjs';
+import { ValidationError, dateInput, textField, uuid, EXPENSE_CATEGORIES } from './finance.mjs';
 
+function expenseCategory(body){
+  if(body.kind!=='expense')return '';
+  const category=body.category??'';
+  if(category!==''&&!EXPENSE_CATEGORIES.includes(category))throw new ValidationError('Categoria inválida.');
+  return category;
+}
 export function cashInput(body={}) {
   if(!body||typeof body!=='object'||Array.isArray(body))throw new ValidationError('Lançamento inválido.');
   if(!['expense','partner_payment','income','adjustment'].includes(body.kind))throw new ValidationError('Selecione o tipo de lançamento.');
@@ -8,7 +14,7 @@ export function cashInput(body={}) {
   if((['expense','partner_payment'].includes(body.kind)&&body.amountCents>0)||(body.kind==='income'&&body.amountCents<0))throw new ValidationError('O valor não corresponde ao tipo de lançamento.');
   return {requestId:uuid(body.requestId),kind:body.kind,occurredAt:dateInput(body.occurredAt),amountCents:body.amountCents,
     description:body.kind==='partner_payment'?'Pagamento de sócio':textField(body.description,'Descrição',160,true),notes:textField(body.notes,'Observação',1000),
-    recipientId:body.kind==='partner_payment'?uuid(body.recipientId):null};
+    recipientId:body.kind==='partner_payment'?uuid(body.recipientId):null,category:expenseCategory(body)};
 }
 function period(query) {
   const from=dateInput(query.from??'2000-01-01'),to=dateInput(query.to??'2100-12-31');
@@ -26,20 +32,20 @@ export function registerCashbook(app,pool) {
       await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[input.requestId]);
       const previous=(await client.query('SELECT *,occurred_at::text AS date_text FROM forma_finance.cash_transactions WHERE request_id=$1',[input.requestId])).rows[0];
       if(previous){
-        const same=previous.kind===input.kind&&previous.date_text===input.occurredAt&&Number(previous.amount_cents)===input.amountCents&&previous.description===input.description&&previous.notes===input.notes&&previous.recipient_id===input.recipientId;
+        const same=previous.kind===input.kind&&previous.date_text===input.occurredAt&&Number(previous.amount_cents)===input.amountCents&&previous.description===input.description&&previous.notes===input.notes&&previous.recipient_id===input.recipientId&&previous.category===input.category;
         if(!same)throw new ValidationError('Este lançamento já foi registrado com outros dados. Abra um novo lançamento.',409);
         await client.query('COMMIT');return res.json({id:previous.id,repeated:true});
       }
       let name=null;
       if(input.recipientId){const user=(await client.query('SELECT name FROM forma_auth.users WHERE id=$1 AND active=true FOR SHARE',[input.recipientId])).rows[0];if(!user)throw new ValidationError('Selecione um usuário ativo.');name=user.name;}
       const id=randomUUID();
-      await client.query(`INSERT INTO forma_finance.cash_transactions(id,request_id,kind,occurred_at,amount_cents,description,notes,recipient_id,recipient_name) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)`,[id,input.requestId,input.kind,input.occurredAt,input.amountCents,input.description,input.notes,input.recipientId,name]);
+      await client.query(`INSERT INTO forma_finance.cash_transactions(id,request_id,kind,occurred_at,amount_cents,description,notes,recipient_id,recipient_name,category) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,[id,input.requestId,input.kind,input.occurredAt,input.amountCents,input.description,input.notes,input.recipientId,name,input.category]);
       await client.query('COMMIT');res.status(201).json({id});
     }catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
   });
   app.get('/api/finance/statement',async(req,res)=>{
     const {from,to,page}=period(req.query),kind=req.query.kind||null;
-    if(kind&&!['purchase','sale','expense','partner_payment','income','adjustment'].includes(kind))throw new ValidationError('Tipo inválido.');
+    if(kind&&!['purchase','sale','expense','partner_payment','income','adjustment','debt_payment'].includes(kind))throw new ValidationError('Tipo inválido.');
     // One statement snapshot keeps totals and running balances consistent during concurrent writes.
     const {rows:[result]}=await pool.query(`WITH ledger AS (
       SELECT b.*,sum(amount_cents) OVER(ORDER BY occurred_at,created_at,id ROWS UNBOUNDED PRECEDING) balance_cents FROM forma_finance.cashbook b
@@ -49,7 +55,7 @@ export function registerCashbook(app,pool) {
       coalesce(sum(amount_cents) FILTER(WHERE occurred_at BETWEEN $1::date AND $2::date AND amount_cents>0),0) income,
       coalesce(-sum(amount_cents) FILTER(WHERE occurred_at BETWEEN $1::date AND $2::date AND amount_cents<0),0) outgoing,
       coalesce(sum(amount_cents) FILTER(WHERE occurred_at<=(now() AT TIME ZONE 'America/Sao_Paulo')::date),0) current FROM ledger),
-    page_rows AS (SELECT s.*,coalesce(a.actor_name,'Registro anterior / responsável não informado') actor_name FROM selected s
+    page_rows AS (SELECT s.*,coalesce(s.paid_by,a.actor_name,'Registro anterior / responsável não informado') actor_name FROM selected s
       LEFT JOIN LATERAL(SELECT actor_name FROM forma_finance.activity_log WHERE entity_id=s.id AND entity IN ('entries','sales','cash_transactions','sale_orders') AND operation='INSERT' ORDER BY id LIMIT 1) a ON true
       ORDER BY occurred_at DESC,created_at DESC,id DESC LIMIT 20 OFFSET $4)
     SELECT (SELECT row_to_json(totals) FROM totals) totals,(SELECT count(*) FROM selected) count,

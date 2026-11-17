@@ -1,7 +1,7 @@
 'use client';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Icon } from '../icons';
-import { api, type Cart, type CatalogItem, type Product } from './lib';
+import { api, available, type Cart, type CatalogItem, type Product } from './lib';
 import { SellView } from './sell';
 import { ProductSheet, ProductsView } from './products';
 import { ProductWizard } from './wizard';
@@ -44,8 +44,8 @@ export function StockApp({ initialTab, openWizard }: { initialTab: Tab; openWiza
     const byId = new Map(products.map(p => [p.id, p]));
     let changed = false; const next: Cart = {};
     for (const [id, line] of Object.entries(cart)) {
-      const p = byId.get(id);
-      const q = p ? Math.min(line.quantity, p.stock) : 0;
+      const p = line.productId ? byId.get(line.productId) : undefined;
+      const q = p ? Math.min(line.quantity, available(p, line.size ?? null)) : 0;
       if (q > 0) next[id] = q === line.quantity ? line : { ...line, quantity: q };
       if (q !== line.quantity) changed = true;
     }

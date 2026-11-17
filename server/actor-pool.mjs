@@ -1,9 +1,11 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
+import { randomUUID } from 'node:crypto';
 
 // Transaction-local settings never leak a user's identity to a pooled connection.
+// op_id groups every row written by one operation, so the log shows one event per action.
 export const actors = new AsyncLocalStorage();
 export async function setActor(client, actor) {
-  if (actor) await client.query("SELECT set_config('infinity.actor_id',$1,true),set_config('infinity.actor_name',$2,true)",[actor.id,actor.name]);
+  if (actor) await client.query("SELECT set_config('infinity.actor_id',$1,true),set_config('infinity.actor_name',$2,true),set_config('infinity.op_id',$3,true)",[actor.id,actor.name,randomUUID()]);
 }
 export function actorPool(pool) {
   return {

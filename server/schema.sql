@@ -159,3 +159,31 @@ CREATE INDEX IF NOT EXISTS sales_order ON forma_finance.sales(order_id);
 -- Itens de cortesia podem sair por R$ 0,00.
 ALTER TABLE forma_finance.sales DROP CONSTRAINT IF EXISTS sales_total_cents_check;
 ALTER TABLE forma_finance.sales ADD CONSTRAINT sales_total_cents_check CHECK (total_cents>=0 AND total_cents<=10000000000);
+
+-- Venda no fiado: o dinheiro só entra no caixa quando o devedor paga.
+ALTER TABLE forma_finance.sale_orders ADD COLUMN IF NOT EXISTS on_credit boolean NOT NULL DEFAULT false;
+CREATE TABLE IF NOT EXISTS forma_finance.debtors (
+  id uuid PRIMARY KEY,
+  request_id uuid NOT NULL UNIQUE,
+  name varchar(160) NOT NULL CHECK (length(trim(name))>0),
+  items varchar(2000) NOT NULL DEFAULT '',
+  total_cents bigint NOT NULL CHECK (total_cents>0 AND total_cents<=10000000000),
+  owed_at date NOT NULL,
+  order_id uuid UNIQUE REFERENCES forma_finance.sale_orders(id),
+  notes varchar(1000) NOT NULL DEFAULT '',
+  created_by_name varchar(100) NOT NULL DEFAULT coalesce(nullif(current_setting('infinity.actor_name',true),''),''),
+  status varchar(10) NOT NULL DEFAULT 'open' CHECK (status IN ('open','paid','cancelled')),
+  paid_at date,
+  paid_by_name varchar(100),
+  paid_registered_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  CHECK ((status='paid') = (paid_at IS NOT NULL))
+);
+CREATE INDEX IF NOT EXISTS debtors_status ON forma_finance.debtors(status,owed_at DESC);
+
+-- Tamanhos (camisetas): o estoque é controlado por tamanho; o total do produto é a soma.
+ALTER TABLE forma_finance.products ADD COLUMN IF NOT EXISTS sizes varchar(10)[] NOT NULL DEFAULT '{}';
+ALTER TABLE forma_finance.entries ADD COLUMN IF NOT EXISTS size varchar(10);
+ALTER TABLE forma_finance.sales ADD COLUMN IF NOT EXISTS size varchar(10);
+ALTER TABLE forma_finance.stock_movements ADD COLUMN IF NOT EXISTS size varchar(10);
+CREATE INDEX IF NOT EXISTS movements_product_size ON forma_finance.stock_movements(product_id,size);

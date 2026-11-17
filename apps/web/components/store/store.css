@@ -253,3 +253,49 @@
   .st-add{padding:0 14px}
   .st-actions{grid-template-columns:repeat(2,1fr)}
 }
+
+/* Tamanhos */
+.st-card-sizes{border:0;border-top:1px solid var(--line);background:#f6f6f6;min-height:44px;font-size:13px;font-weight:650;display:flex;align-items:center;justify-content:center;gap:8px;color:#171717;white-space:pre}
+.st-sizes-pick{display:flex;flex-direction:column;gap:8px;margin-bottom:16px}
+.st-size-row{display:flex;align-items:center;gap:12px;border:1.5px solid var(--line);border-radius:14px;padding:8px 10px}
+.st-size-on{border-color:#171717}
+.st-size-out{opacity:.45}
+.st-size-tag{min-width:48px;height:48px;border-radius:12px;border:0;background:#171717;color:#fff;font-weight:700;font-size:15px;display:grid;place-items:center;padding:0 8px;flex-shrink:0}
+.st-size-out .st-size-tag{background:#bbb}
+.st-size-info{flex:1;display:flex;flex-direction:column;gap:2px;min-width:0}
+.st-size-info strong{font-size:14px}
+.st-size-info small{font-size:12px;color:#888}
+.st-size-add{min-height:48px;border-radius:12px}
+.st-size-row .st-stepper button{width:44px;height:48px}
+.st-size-row .st-stepper input{width:44px!important;min-height:48px;font-size:17px!important}
+.st-size-chip{display:inline-block;margin-left:6px;background:#171717;color:#fff;font-size:11px;border-radius:6px;padding:2px 6px;vertical-align:1px}
+.st-size-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));gap:8px;margin:-6px 0 16px}
+.st-size-grid>div{background:#f6f6f6;border-radius:12px;padding:8px;display:flex;flex-direction:column;align-items:center;gap:2px}
+.st-size-grid span{font-size:12px;font-weight:650;color:#555}
+.st-size-grid strong{font-size:18px}
+.st-size-zero{opacity:.45}
+.st-size-stock{display:flex;flex-direction:column;gap:10px;margin-bottom:18px}
+.st-size-stock>div{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.st-row-sizes{color:#555!important;font-weight:600}
+.st-chips-wrap{flex-wrap:wrap;overflow:visible}
+.st-optional{font-weight:400;color:#999;font-size:11px;margin-left:6px}
+/* Venda para devedor */
+.st-check{display:flex;align-items:center;gap:12px;border:1.5px solid var(--line);border-radius:14px;padding:12px 14px;margin-bottom:16px;cursor:pointer}
+.st-check input{width:22px;height:22px;accent-color:#b26a00;flex-shrink:0}
+.st-check span{display:flex;flex-direction:column;gap:2px}
+.st-check strong{font-size:14px}
+.st-check small{font-size:12px;color:#888}
+.st-check-on{border-color:#b26a00;background:#fff8ec}
+.st-badge{display:inline-block;margin-left:6px;font-size:10px;font-weight:650;border-radius:6px;padding:2px 6px;background:#eee;color:#555;vertical-align:1px}
+.st-badge-warn{background:#fff4e0;color:#8a5200}
+.st-badge-ok{background:#eaf6ee;color:#1b7f3b}
+/* Formulários do financeiro */
+.st-field textarea{width:100%;border:1px solid #ddd;border-radius:12px;padding:12px 14px;font:inherit;font-size:16px;resize:vertical;background:#fff}
+.st-field textarea:focus{outline:0;border-color:#171717}
+.st-segment{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:4px;background:#ececec;border-radius:14px;margin-bottom:18px}
+.st-segment button{border:0;background:none;min-height:48px;border-radius:11px;font-weight:600;color:#777;display:flex;align-items:center;justify-content:center;gap:6px}
+.st-segment button[aria-pressed=true]{background:#fff;color:#171717;box-shadow:0 1px 4px #0000000f}
+.st-picked{display:flex;align-items:center;gap:12px;background:#f6f6f6;border-radius:14px;padding:10px 12px;margin-bottom:16px}
+.st-picked>div{flex:1;display:flex;flex-direction:column;gap:2px;min-width:0}
+.st-picked small{font-size:12px;color:#888}
+.st-pick-list{margin-top:12px;max-height:50svh;overflow:auto}

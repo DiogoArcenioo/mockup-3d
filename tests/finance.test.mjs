@@ -10,7 +10,7 @@ test('quantidades fracionadas são exatas até três casas',()=>{
   assert.equal(entryInput(entry({packageCount:3,unitsPerPackage:.123})).totalQuantity,.369);
 });
 test('cadastro exige classificação, unidade e nome válidos',()=>{
-  assert.deepEqual(productInput({name:'  Tinta  ',type:'consumption',unit:'ml'}),{name:'Tinta',type:'consumption',unit:'ml',category:null,colorId:null,brandId:null,minStock:0,notes:''});
+  assert.deepEqual(productInput({name:'  Tinta  ',type:'consumption',unit:'ml'}),{name:'Tinta',type:'consumption',unit:'ml',category:null,colorId:null,brandId:null,sizes:[],minStock:0,notes:''});
   for(const changes of [{name:''},{type:'sale'},{unit:'caixa'},{minStock:-1},{name:42}])assert.throws(()=>productInput({name:'Caneca',type:'resale',category:'mug',unit:'un',...changes}));
 });
 

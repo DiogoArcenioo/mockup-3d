@@ -29,7 +29,19 @@ export function productInput(body = {}) {
   const brandId = body.brandId === '' || body.brandId == null ? null : uuid(body.brandId);
   if (colorId && !category) throw new ValidationError('Escolha uma categoria antes de informar a cor.');
   if (brandId && category !== 'tshirt') throw new ValidationError('Marca está disponível apenas para camisetas.');
-  return { name, type: body.type, unit: body.unit, category, colorId, brandId, minStock: quantity(body.minStock ?? 0, 'Estoque mínimo', true), notes: textField(body.notes, 'Observações', 1000) };
+  return { name, type: body.type, unit: body.unit, category, colorId, brandId, sizes: sizesInput(body.sizes, category), minStock: quantity(body.minStock ?? 0, 'Estoque mínimo', true), notes: textField(body.notes, 'Observações', 1000) };
+}
+export function sizeInput(value) {
+  if (value === undefined || value === null || value === '') return null;
+  if (typeof value !== 'string' || !value.trim() || value.trim().length > 10) throw new ValidationError('Tamanho inválido.');
+  return value.trim().toUpperCase();
+}
+function sizesInput(value, category) {
+  if (value === undefined || value === null) return [];
+  if (!Array.isArray(value) || value.length > 15) throw new ValidationError('Tamanhos inválidos.');
+  const sizes = [...new Set(value.map(sizeInput).filter(Boolean))];
+  if (sizes.length && category !== 'tshirt') throw new ValidationError('Tamanhos estão disponíveis apenas para camisetas.');
+  return sizes;
 }
 export function dateInput(value, label = 'Data') {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value) || !Number.isFinite(Date.parse(`${value}T12:00:00Z`)) || new Date(`${value}T12:00:00Z`).toISOString().slice(0, 10) !== value || value < '2000-01-01' || value > '2100-12-31') throw new ValidationError(`${label} inválida.`);
@@ -48,7 +60,7 @@ export function entryInput(body = {}) {
   if (!Number.isSafeInteger(body.totalCents) || body.totalCents <= 0 || body.totalCents > 10000000000) throw new ValidationError('Informe um valor total válido, maior que zero.');
   if (!['unit', 'box', 'package'].includes(body.packaging)) throw new ValidationError('Embalagem inválida.');
   if (body.packaging === 'unit' && unitsPerPackage !== 1) throw new ValidationError('Para entrada avulsa, a quantidade por embalagem é 1.');
-  return { productId: uuid(body.productId), requestId: uuid(body.requestId), purchasedAt: dateInput(body.purchasedAt), packageCount, unitsPerPackage, totalQuantity, totalCents: body.totalCents, packaging: body.packaging, supplier: textField(body.supplier, 'Fornecedor', 160), notes: textField(body.notes, 'Observações', 1000) };
+  return { productId: uuid(body.productId), requestId: uuid(body.requestId), purchasedAt: dateInput(body.purchasedAt), packageCount, unitsPerPackage, totalQuantity, totalCents: body.totalCents, packaging: body.packaging, size: sizeInput(body.size), supplier: textField(body.supplier, 'Fornecedor', 160), notes: textField(body.notes, 'Observações', 1000) };
 }
 
 export function saleInput(body = {}) {
@@ -81,11 +93,20 @@ export function orderInput(body = {}) {
     const amount = quantity(item.quantity, 'Quantidade');
     const price = cents(item.unitPriceCents, 'Preço do item');
     const total = Math.round(price * amount);
-    return { productId: uuid(item.productId), quantity: amount, unitPriceCents: price, totalCents: total };
+    return { productId: uuid(item.productId), size: sizeInput(item.size), quantity: amount, unitPriceCents: price, totalCents: total };
   });
   const totalCents = items.reduce((sum, item) => sum + item.totalCents, 0);
   if (totalCents > 10000000000) throw new ValidationError('O total da venda passou do limite permitido.');
   const paymentMethod = body.paymentMethod ?? '';
   if (!PAYMENTS.includes(paymentMethod)) throw new ValidationError('Forma de pagamento inválida.');
-  return { requestId: uuid(body.requestId), soldAt: dateInput(body.soldAt, 'Data da venda'), customer: textField(body.customer, 'Cliente', 160, true), paymentMethod, notes: textField(body.notes, 'Observações', 1000), items, totalCents };
+  const onCredit = body.onCredit === true;
+  if (onCredit && totalCents <= 0) throw new ValidationError('Venda para devedor precisa ter valor maior que zero.');
+  return { requestId: uuid(body.requestId), soldAt: dateInput(body.soldAt, 'Data da venda'), customer: textField(body.customer, 'Cliente', 160, true), paymentMethod: onCredit ? '' : paymentMethod, onCredit, notes: textField(body.notes, 'Observações', 1000), items, totalCents };
+}
+
+export const EXPENSE_CATEGORIES = ['Insumos', 'Embalagem', 'Frete', 'Aluguel', 'Contas', 'Marketing', 'Taxas', 'Outros'];
+export function debtorInput(body = {}) {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) throw new ValidationError('Dados inválidos.');
+  if (!Number.isSafeInteger(body.totalCents) || body.totalCents <= 0 || body.totalCents > 10000000000) throw new ValidationError('Informe o valor total, maior que zero.');
+  return { requestId: uuid(body.requestId), name: textField(body.name, 'Nome', 160, true), items: textField(body.items, 'Produtos', 2000), totalCents: body.totalCents, owedAt: dateInput(body.owedAt ?? new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date()), 'Data'), notes: textField(body.notes, 'Observação', 1000) };
 }

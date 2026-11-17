@@ -1,0 +1,91 @@
+/* Financeiro e log — mesmo padrão do estoque. */
+.fi-page{max-width:900px}
+.fi-in{color:#1b7f3b!important}
+.fi-out{color:#c62828!important}
+.fi-neg{color:#ff9b9b!important}
+.fi-pending{color:#999!important}
+.fi-balance{background:#171717;color:#fff;border-radius:22px;padding:22px;margin-bottom:12px;display:flex;flex-direction:column;gap:6px}
+.fi-balance>span{font-size:13px;color:#aaa}
+.fi-balance>strong{font-size:36px;letter-spacing:-1.2px;font-variant-numeric:tabular-nums}
+.fi-balance>div{display:flex;align-items:center;gap:14px;font-size:13px;margin-top:4px}
+.fi-balance small{color:#888}
+.fi-balance .fi-in{color:#7fe0a0!important}
+.fi-balance .fi-out{color:#ff9b9b!important}
+.fi-actions{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr) minmax(0,1fr);gap:10px;margin-bottom:18px}
+.fi-actions button{border:1px solid var(--line);background:#fff;color:#171717;border-radius:16px;min-height:76px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;font-size:13px;font-weight:600}
+.fi-actions button:active{transform:scale(.98)}
+.fi-actions .fi-main-action{background:#fff;border:2px solid #171717}
+.fi-period{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:12px}
+.fi-period>div{display:flex;flex-direction:column;gap:3px;min-width:0}
+.fi-period span{font-size:11px;color:#888}
+.fi-period strong{font-size:15px;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fi-icon-in{background:#eaf6ee;color:#1b7f3b}
+.fi-icon-out{background:#fbeeee;color:#c62828}
+.fi-receivable{display:flex;align-items:center;justify-content:space-between;gap:12px;background:#fff;border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:12px}
+.fi-receivable>div{display:flex;flex-direction:column;gap:3px}
+.fi-receivable span{font-size:12px;color:#888}
+.fi-receivable strong{font-size:24px;letter-spacing:-.6px}
+.fi-receivable small{font-size:12px;color:#888}
+.fi-receivable .primary{border-radius:12px;min-height:48px}
+.fi-debtors{display:flex;flex-direction:column;gap:10px}
+.fi-debtor{background:#fff;border:1px solid var(--line);border-radius:16px;padding:14px 16px;display:flex;flex-direction:column;gap:8px}
+.fi-debtor-top{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+.fi-debtor-top>div{display:flex;flex-direction:column;gap:4px;min-width:0}
+.fi-debtor-top strong{font-size:15px}
+.fi-debtor-top small{font-size:12px;color:#888;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.fi-debtor-top b{font-size:17px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.fi-debtor-items{display:flex;flex-direction:column;gap:2px;font-size:13px;color:#555;background:#f7f7f7;border-radius:10px;padding:10px 12px}
+.fi-clamp{max-height:52px;overflow:hidden;-webkit-mask-image:linear-gradient(#000 60%,transparent)}
+.fi-debtor .st-link{align-self:flex-start;min-height:32px;padding:0}
+.fi-debtor-actions{display:flex;justify-content:flex-end;gap:8px}
+.fi-debtor-actions button{min-height:46px;border-radius:12px}
+.fi-danger{background:#c62828;border-color:#c62828}
+.fi-danger:hover{background:#a51f1f}
+.fi-custom{display:flex;align-items:center;gap:8px;margin:-4px 0 14px;font-size:13px;color:#777}
+.fi-custom input{flex:1;min-width:0;min-height:46px;border:1px solid #ddd;border-radius:12px;padding:0 10px;font-size:15px;background:#fff}
+.fi-report{min-width:0;display:flex;flex-direction:column;gap:12px}
+.fi-report-head{display:flex;justify-content:space-between;align-items:center;font-size:13px;color:#777}
+.fi-card{background:#fff;border:1px solid var(--line);border-radius:18px;padding:18px}
+.fi-card h3{margin:0 0 14px;font-size:15px;font-weight:650}
+.fi-card-dark{background:#171717;border-color:#171717;color:#fff}
+.fi-card-dark p{margin:12px 0 0;font-size:12px;color:#aaa}
+.fi-trio{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.fi-trio>div{display:flex;flex-direction:column;gap:4px;min-width:0}
+.fi-trio span{font-size:12px;color:#aaa}
+.fi-trio strong{font-size:20px;letter-spacing:-.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fi-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.fi-stat{background:#f6f6f6;border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:4px;min-width:0}
+.fi-stat span{font-size:11px;color:#888}
+.fi-stat strong{font-size:17px;letter-spacing:-.3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fi-stat small{font-size:10px;color:#999}
+.fi-bars{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:12px}
+.fi-bars li{display:flex;flex-direction:column;gap:5px}
+.fi-bars li>div{display:flex;justify-content:space-between;gap:10px;font-size:13px}
+.fi-bars li>div span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fi-bars strong{font-variant-numeric:tabular-nums;white-space:nowrap}
+.fi-bars i{display:block;height:8px;border-radius:4px;background:#171717}
+.fi-bars small{font-size:11px;color:#999}
+.fi-two-cards{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}
+.fi-log{max-width:760px}
+.fi-log-head{display:flex;align-items:center;justify-content:space-between}
+.fi-log-head .page-title{margin:0}
+.fi-log-day{margin-bottom:18px}
+.fi-log-day h2{font-size:13px;font-weight:650;color:#777;margin:0 0 8px;text-transform:capitalize}
+.fi-log-meta{color:#aaa!important}
+.fi-log .st-row-info small{white-space:normal}
+.fi-log-sale{background:#eaf6ee;color:#1b7f3b}
+.fi-log-money{background:#eef1fb;color:#3949ab}
+.fi-log-stock{background:#fff4e0;color:#8a5200}
+@media(max-width:700px){
+  .fi-balance>strong{font-size:32px}
+  .fi-actions button{min-height:70px;font-size:12px}
+  .fi-grid{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+  .fi-two-cards{grid-template-columns:1fr}
+  .fi-trio strong{font-size:16px}
+}
+@media print{
+  .app-sidebar,.app-header,.fi-balance,.fi-actions,.st-tabs,.st-chips,.fi-custom,.fi-report-head button,.st-cartbar{display:none!important}
+  .app-workspace{margin:0!important;padding:0!important}
+  .fi-card{break-inside:avoid}
+  .fi-card-dark{background:#fff;color:#000;border:1px solid #000}
+}

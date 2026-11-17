@@ -45,11 +45,11 @@ export function OrdersView({ refresh }: { refresh: number }) {
         return <div key={o.id} className={`st-order${expanded ? ' st-order-open' : ''}`}>
           <button className="st-row" onClick={() => setOpen(expanded ? null : o.id)} aria-expanded={expanded}>
             <span className="st-order-icon"><Icon name="cart" size={18} /></span>
-            <span className="st-row-info"><strong>{o.customer || 'Cliente não informado'}</strong><small>{qty(items)} {items === 1 ? 'item' : 'itens'}{o.sellerName ? ' · ' + o.sellerName.split(' ')[0] : ''}{o.paymentMethod ? ' · ' + payments[o.paymentMethod] : ''}</small></span>
+            <span className="st-row-info"><strong>{o.customer || 'Cliente não informado'}{o.onCredit && <span className={`st-badge ${o.debtorStatus === 'paid' ? 'st-badge-ok' : 'st-badge-warn'}`}>{o.debtorStatus === 'paid' ? 'Pago' : 'Devedor'}</span>}</strong><small>{qty(items)} {items === 1 ? 'item' : 'itens'}{o.sellerName ? ' · ' + o.sellerName.split(' ')[0] : ''}{o.paymentMethod ? ' · ' + payments[o.paymentMethod] : ''}</small></span>
             <span className="st-row-stock"><strong>{money(o.totalCents)}</strong><small>{period === 'today' ? time(o.createdAt) : shortDate(o.soldAt)}</small></span>
           </button>
           {expanded && <div className="st-order-items">
-            {o.items.map((i, n) => <div key={n}><span>{qty(i.quantity)}× {i.name}{i.color ? ` · ${i.color}` : ''}</span><span>{money(i.totalCents)}</span></div>)}
+            {o.items.map((i, n) => <div key={n}><span>{qty(i.quantity)}× {i.name}{i.size ? ` ${i.size}` : ''}{i.color ? ` · ${i.color}` : ''}</span><span>{money(i.totalCents)}</span></div>)}
             {discount > 0 && <div className="st-discount"><span>Desconto</span><span>−{money(discount)}</span></div>}
             {o.sellerName && <div className="st-muted"><span>Vendido por {o.sellerName}</span><span>{shortDate(o.soldAt)}</span></div>}
           </div>}

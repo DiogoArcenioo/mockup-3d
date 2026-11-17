@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
 import { Icon } from '../icons';
-import { api, json, money, qty, today, units, unitNames, variant, costCents, isLow, margin, stamp, shortDate, uploadPhoto, categories, type CatalogItem, type Category, type Product, type Unit } from './lib';
+import { api, json, money, qty, today, units, unitNames, variant, sellSizes, sizeLabel, available, SIZE_PRESETS, costCents, isLow, margin, stamp, shortDate, uploadPhoto, categories, type CatalogItem, type Category, type Product, type Unit } from './lib';
 import { Chips, ErrorText, MoneyInput, Sheet, Stepper, Thumb } from './ui';
 
 type Filter = '' | 'low' | 'resale' | 'consumption';
@@ -24,7 +24,7 @@ export function ProductsView({ products, onOpen, onNew }: { products: Product[];
     {list.length ? <div className="st-list">
       {list.map(p => <button key={p.id} className="st-row" onClick={() => onOpen(p)}>
         <Thumb product={p} />
-        <span className="st-row-info"><strong>{p.name}</strong><small>{variant(p)}{p.salePriceCents !== null && <> · {money(p.salePriceCents)}</>}</small></span>
+        <span className="st-row-info"><strong>{p.name}</strong><small>{variant(p)}{p.salePriceCents !== null && <> · {money(p.salePriceCents)}</>}</small>{p.sizes.length > 0 && <small className="st-row-sizes">{sellSizes(p).map(s => `${s ?? '—'} ${qty(available(p, s))}`).join(' · ')}</small>}</span>
         <span className={`st-row-stock${p.stock <= 0 ? ' st-out' : isLow(p) ? ' st-warn' : ''}`}><strong>{qty(p.stock)}</strong><small>{units[p.unit]}</small></span>
       </button>)}
     </div> : <div className="st-empty"><Icon name={products.length ? 'search' : 'box'} size={30} /><p>{products.length ? 'Nada encontrado.' : 'Nenhum produto ainda.'}</p>{!products.length && <button className="primary" onClick={onNew}><Icon name="plus" size={18} /> Cadastrar produto</button>}</div>}
@@ -35,7 +35,7 @@ type Mode = 'main' | 'entry' | 'price' | 'count' | 'edit';
 type History = {
   costs: { id: string; source: string; unitCost: number; actorName: string; createdAt: string; quantity: number | null; supplier: string }[];
   prices: { id: string; priceCents: number; previousCents: number | null; actorName: string; createdAt: string }[];
-  movements: { id: string; kind: string; quantity: number; occurredAt: string; customer: string }[];
+  movements: { id: string; kind: string; size: string | null; quantity: number; occurredAt: string; customer: string }[];
 };
 
 export function ProductSheet({ product, colors, brands, onClose, onSaved, onCatalog, notice }: { product: Product; colors: CatalogItem[]; brands: CatalogItem[]; onClose: () => void; onSaved: (p: Product, message: string) => void; onCatalog: () => void; notice?: string }) {
@@ -67,6 +67,7 @@ function Overview({ product: p, setMode }: { product: Product; setMode: (m: Mode
       <div><span>Custo</span><strong>{cost === null ? '—' : money(cost)}</strong></div>
       {p.type === 'resale' && <div><span>Venda</span><strong>{p.salePriceCents === null ? '—' : money(p.salePriceCents)}</strong>{m !== null && <small className={m < 0 ? 'st-neg' : ''}>margem {m}%</small>}</div>}
     </div>
+    {p.sizes.length > 0 && <div className="st-size-grid">{sellSizes(p).map(s => <div key={s ?? '-'} className={available(p, s) <= 0 ? 'st-size-zero' : ''}><span>{s ?? 'Sem tam.'}</span><strong>{qty(available(p, s))}</strong></div>)}</div>}
     <div className="st-actions">
       <button onClick={() => setMode('entry')}><Icon name="plus" size={20} /><span>Entrada</span></button>
       {p.type === 'resale' && <button onClick={() => setMode('price')}><Icon name="tag" size={20} /><span>Preço</span></button>}
@@ -77,7 +78,7 @@ function Overview({ product: p, setMode }: { product: Product; setMode: (m: Mode
     <ErrorText>{error}</ErrorText>
     {!history && !error && <p className="st-muted">Carregando…</p>}
     {history && tab === 'moves' && (history.movements.length ? <ul className="st-history">
-      {history.movements.map(m => <li key={m.id}><span className={`st-dot ${m.quantity < 0 ? 'st-dot-out' : ''}`} /><span><strong>{kinds[m.kind] || m.kind}</strong><small>{shortDate(m.occurredAt)}{m.customer ? ' · ' + m.customer : ''}</small></span><b className={m.quantity < 0 ? 'st-neg' : ''}>{m.quantity > 0 ? '+' : ''}{qty(m.quantity)}</b></li>)}
+      {history.movements.map(m => <li key={m.id}><span className={`st-dot ${m.quantity < 0 ? 'st-dot-out' : ''}`} /><span><strong>{kinds[m.kind] || m.kind}{m.size ? ` · ${m.size}` : ''}</strong><small>{shortDate(m.occurredAt)}{m.customer ? ' · ' + m.customer : ''}</small></span><b className={m.quantity < 0 ? 'st-neg' : ''}>{m.quantity > 0 ? '+' : ''}{qty(m.quantity)}</b></li>)}
     </ul> : <p className="st-muted">Sem movimentos ainda.</p>)}
     {history && tab === 'prices' && (history.prices.length || history.costs.length ? <ul className="st-history">
       {[...history.prices.map(x => ({ id: x.id, at: x.createdAt, label: 'Venda', value: money(x.priceCents), detail: x.previousCents === null ? 'Preço inicial' : `antes ${money(x.previousCents)}`, who: x.actorName })),
@@ -88,7 +89,7 @@ function Overview({ product: p, setMode }: { product: Product; setMode: (m: Mode
   </>;
 }
 
-type FormProps = { product: Product; setBusy: (b: boolean) => void; onDone: (p: Product, message: string) => void };
+export type FormProps = { product: Product; setBusy: (b: boolean) => void; onDone: (p: Product, message: string) => void };
 
 function useSubmit(setBusy: (b: boolean) => void) {
   const [pending, setPending] = useState(false), [error, setError] = useState('');
@@ -101,8 +102,9 @@ function useSubmit(setBusy: (b: boolean) => void) {
   return { pending, error, setError, run };
 }
 
-function EntryForm({ product: p, setBusy, onDone }: FormProps) {
+export function EntryForm({ product: p, setBusy, onDone }: FormProps) {
   const [amount, setAmount] = useState(1);
+  const [size, setSize] = useState<string>('');
   const [unitCost, setUnitCost] = useState<number | null>(costCents(p));
   const [date, setDate] = useState(today);
   const [supplier, setSupplier] = useState('');
@@ -110,19 +112,21 @@ function EntryForm({ product: p, setBusy, onDone }: FormProps) {
   const { pending, error, setError, run } = useSubmit(setBusy);
   const total = unitCost === null ? 0 : Math.round(unitCost * amount);
   const submit = () => {
+    if (p.sizes.length && !size) return setError('Escolha o tamanho.');
     if (amount <= 0) return setError('Informe a quantidade.');
     if (!unitCost) return setError('Informe o custo por unidade.');
     const whole = Number.isInteger(amount);
-    const body = { productId: p.id, purchasedAt: date, packaging: whole ? 'unit' : 'package', packageCount: whole ? amount : 1, unitsPerPackage: whole ? 1 : amount, totalCents: total, supplier: supplier.trim(), notes: '' };
+    const body = { productId: p.id, purchasedAt: date, packaging: whole ? 'unit' : 'package', packageCount: whole ? amount : 1, unitsPerPackage: whole ? 1 : amount, totalCents: total, size: size || null, supplier: supplier.trim(), notes: '' };
     const key = JSON.stringify(body);
     if (request.key !== key) Object.assign(request, { key, id: crypto.randomUUID() });
     return run(async () => {
       await api('entries', json('POST', { ...body, requestId: request.id }));
       const { products } = await api<{ products: Product[] }>('products');
-      onDone(products.find(x => x.id === p.id)!, `+${qty(amount)} ${units[p.unit]} no estoque`);
+      onDone(products.find(x => x.id === p.id)!, `+${qty(amount)} ${units[p.unit]}${size ? ' ' + size : ''} no estoque`);
     });
   };
   return <form className="st-form" onSubmit={e => { e.preventDefault(); void submit(); }}>
+    {p.sizes.length > 0 && <div className="st-field"><span>Tamanho</span><Chips label="Tamanho" value={size} onChange={setSize} options={p.sizes.map(s => [s, s] as [string, string])} /></div>}
     <div className="st-field"><span>Quantidade</span><Stepper label="Quantidade" value={amount} min={0} onChange={setAmount} decimals={p.unit !== 'un'} /></div>
     <div className="st-field"><span>Custo por {unitNames[p.unit]}</span><MoneyInput label="Custo por unidade" value={unitCost} onChange={setUnitCost} large /></div>
     <div className="st-total-box"><div className="st-total"><span>Total da compra</span><strong>{money(total)}</strong></div></div>
@@ -157,17 +161,22 @@ function PriceForm({ product: p, setBusy, onDone }: FormProps) {
 }
 
 function CountForm({ product: p, setBusy, onDone }: FormProps) {
-  const [counted, setCounted] = useState(Math.max(0, p.stock));
+  const options = p.sizes.length ? sellSizes(p) : [];
+  const [size, setSize] = useState<string | null>(options[0] ?? null);
+  const current = available(p, size);
+  const [counted, setCounted] = useState(Math.max(0, current));
+  useEffect(() => setCounted(Math.max(0, available(p, size))), [size, p]);
   const { pending, error, run } = useSubmit(setBusy);
-  const diff = Math.round((counted - p.stock) * 1000) / 1000;
+  const diff = Math.round((counted - current) * 1000) / 1000;
   return <form className="st-form" onSubmit={e => {
     e.preventDefault();
-    void run(async () => { const { product } = await api<{ product: Product }>(`products/${p.id}/count`, json('POST', { counted })); onDone(product, diff ? `Estoque corrigido (${diff > 0 ? '+' : ''}${qty(diff)})` : 'Estoque conferido'); });
+    void run(async () => { const { product } = await api<{ product: Product }>(`products/${p.id}/count`, json('POST', { counted, size })); onDone(product, diff ? `Estoque corrigido (${diff > 0 ? '+' : ''}${qty(diff)})` : 'Estoque conferido'); });
   }}>
-    <p className="st-hint">Quantos você tem de verdade na loja?</p>
+    {options.length > 0 && <div className="st-field"><span>Tamanho</span><Chips label="Tamanho" value={size ?? ''} onChange={v => setSize(v || null)} options={options.map(s => [s ?? '', s ?? 'Sem tam.'] as [string, string])} /></div>}
+    <p className="st-hint">Quantos{size ? ` ${size}` : ''} você tem de verdade na loja?</p>
     <div className="st-field st-center"><Stepper label="Quantidade contada" value={counted} min={0} onChange={setCounted} decimals={p.unit !== 'un'} /></div>
     <div className="st-compare">
-      <div><span>No sistema</span><strong>{qty(p.stock)}</strong></div>
+      <div><span>No sistema</span><strong>{qty(current)}</strong></div>
       <div><span>Diferença</span><strong className={diff < 0 ? 'st-neg' : ''}>{diff > 0 ? '+' : ''}{qty(diff)}</strong></div>
     </div>
     <p className="st-hint">Use para quebras, perdas ou acertos. Não mexe no financeiro.</p>
@@ -183,6 +192,7 @@ function EditForm({ product: p, colors, brands, setBusy, onDone, onCatalog }: Fo
   const [brandId, setBrandId] = useState(p.brandId ?? '');
   const [unit, setUnit] = useState<Unit>(p.unit);
   const [minStock, setMinStock] = useState(p.minStock);
+  const [sizes, setSizes] = useState<string[]>(p.sizes);
   const { pending, error, run } = useSubmit(setBusy);
   async function photo(file: File | undefined) {
     if (!file) return;
@@ -191,7 +201,7 @@ function EditForm({ product: p, colors, brands, setBusy, onDone, onCatalog }: Fo
   return <form className="st-form" onSubmit={e => {
     e.preventDefault();
     void run(async () => {
-      const { product } = await api<{ product: Product }>(`products/${p.id}`, json('PUT', { name, type: p.type, unit, category: category || null, colorId: colorId || null, brandId: category === 'tshirt' ? brandId || null : null, minStock, notes: p.notes }));
+      const { product } = await api<{ product: Product }>(`products/${p.id}`, json('PUT', { name, type: p.type, unit, category: category || null, colorId: colorId || null, brandId: category === 'tshirt' ? brandId || null : null, sizes: category === 'tshirt' ? sizes : [], minStock, notes: p.notes }));
       onDone(product, 'Produto atualizado');
     });
   }}>
@@ -200,6 +210,7 @@ function EditForm({ product: p, colors, brands, setBusy, onDone, onCatalog }: Fo
     {p.type === 'resale' && <div className="st-field"><span>Categoria</span><Chips label="Categoria" value={category} onChange={setCategory} options={Object.entries(categories).map(([id, c]) => [id as Category, c.label])} /></div>}
     {category && <CatalogPicker label="Cor" resource="colors" items={colors} value={colorId} onChange={setColorId} onCreated={onCatalog} />}
     {category === 'tshirt' && <CatalogPicker label="Marca" resource="brands" items={brands} value={brandId} onChange={setBrandId} onCreated={onCatalog} />}
+    {category === 'tshirt' && <SizesPicker value={sizes} onChange={setSizes} />}
     {p.type === 'consumption' && <div className="st-field"><span>Unidade</span><Chips label="Unidade" value={unit} onChange={setUnit} options={Object.entries(units) as [Unit, string][]} /></div>}
     <div className="st-field"><span>Avisar quando tiver menos de</span><Stepper label="Estoque mínimo" value={minStock} min={0} onChange={setMinStock} /></div>
     <ErrorText>{error}</ErrorText>
@@ -224,4 +235,18 @@ export function CatalogPicker({ label, resource, items, value, onChange, onCreat
     {adding && <div className="st-inline-add"><input autoFocus value={name} maxLength={60} onChange={e => setName(e.target.value)} placeholder={`Nova ${label.toLowerCase()}`} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void create(); } }} /><button type="button" className="primary" onClick={() => void create()} disabled={pending}>OK</button><button type="button" className="st-icon-btn" onClick={() => setAdding(false)} aria-label="Cancelar"><Icon name="close" size={18} /></button></div>}
     <ErrorText>{error}</ErrorText>
   </div>;
+}
+
+/** Seleção de tamanhos: atalhos comuns e opção de criar um tamanho próprio. */
+export function SizesPicker({ value, onChange }: { value: string[]; onChange: (v: string[]) => void }) {
+  const [custom, setCustom] = useState('');
+  const options = [...SIZE_PRESETS, ...value.filter(v => !SIZE_PRESETS.includes(v))];
+  const toggle = (s: string) => onChange(value.includes(s) ? value.filter(v => v !== s) : options.filter(o => o === s || value.includes(o)));
+  return <div className="st-field"><span>Tamanhos <small className="st-optional">controla o estoque de cada um</small></span>
+    <div className="st-chips st-chips-wrap" role="group" aria-label="Tamanhos">
+      {options.map(s => <button type="button" key={s} aria-pressed={value.includes(s)} onClick={() => toggle(s)}>{s}</button>)}
+    </div>
+    <div className="st-inline-add"><input value={custom} maxLength={10} onChange={e => setCustom(e.target.value)} placeholder="Outro tamanho (ex.: 10 anos)" onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add(); } }} /><button type="button" className="quiet" onClick={add}>Adicionar</button></div>
+  </div>;
+  function add() { const s = custom.trim().toUpperCase(); if (s && !value.includes(s)) onChange([...value, s]); setCustom(''); }
 }

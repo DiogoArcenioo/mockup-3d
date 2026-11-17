@@ -5,12 +5,13 @@ export type Product = {
   colorId: string | null; colorName: string | null; brandId: string | null; brandName: string | null;
   photoUrl: string | null; minStock: number; notes: string; stock: number;
   salePriceCents: number | null; costPrice: number | null;
+  sizes: string[]; sizeStock: Record<string, number>;
 };
 export type CatalogItem = { id: string; name: string };
-export type OrderItem = { productId: string; name: string; color: string; brand: string; unit: Unit; quantity: number; totalCents: number; listPriceCents: number | null; unitCost: number | null };
-export type Order = { id: string; soldAt: string; customer: string; paymentMethod: '' | 'pix' | 'cash' | 'card'; notes: string; totalCents: number; listTotalCents: number; sellerName: string; createdAt: string; items: OrderItem[] };
+export type OrderItem = { productId: string; name: string; size: string | null; color: string; brand: string; unit: Unit; quantity: number; totalCents: number; listPriceCents: number | null; unitCost: number | null };
+export type Order = { id: string; soldAt: string; customer: string; paymentMethod: '' | 'pix' | 'cash' | 'card'; notes: string; totalCents: number; listTotalCents: number; sellerName: string; createdAt: string; onCredit: boolean; debtorStatus: 'open' | 'paid' | 'cancelled' | null; items: OrderItem[] };
 export type OrdersPage = { orders: Order[]; count: number; totalCents: number; profitCents: number; itemsWithoutCost: number; page: number; pages: number };
-export type CartLine = { quantity: number; priceCents: number };
+export type CartLine = { productId: string; size: string | null; quantity: number; priceCents: number };
 export type Cart = Record<string, CartLine>;
 
 export const categories: Record<Category, { label: string; short: string; icon: string }> = {
@@ -63,3 +64,11 @@ export async function uploadPhoto(productId: string, file: File) {
   const blob = await compressImage(file);
   return api<{ photoUrl: string }>(`products/${productId}/photo`, { method: 'PUT', body: blob, headers: { 'Content-Type': blob.type || 'image/jpeg' } });
 }
+
+export const SIZE_PRESETS = ['PP', 'P', 'M', 'G', 'GG', 'XG', 'XGG'];
+export const cartKey = (productId: string, size: string | null) => productId + '|' + (size ?? '');
+/** Saldo disponível: do tamanho, quando o produto controla tamanhos. */
+export const available = (p: Product, size: string | null) => p.sizes.length ? p.sizeStock[size ?? ''] ?? 0 : p.stock;
+/** Tamanhos que podem ser vendidos; inclui o saldo antigo sem tamanho, se houver. */
+export const sellSizes = (p: Product): (string | null)[] => [...p.sizes, ...((p.sizeStock[''] ?? 0) > 0 ? [null] : [])];
+export const sizeLabel = (size: string | null) => size ?? 'Sem tamanho';

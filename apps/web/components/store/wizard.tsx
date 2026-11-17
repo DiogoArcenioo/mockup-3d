@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Icon } from '../icons';
 import { api, json, money, margin, units, unitNames, uploadPhoto, categories, type CatalogItem, type Category, type Product, type Unit } from './lib';
 import { Chips, ErrorText, MoneyInput, Sheet, Stepper, Thumb } from './ui';
-import { CatalogPicker } from './products';
+import { CatalogPicker, SizesPicker } from './products';
 
 type Kind = Category | 'consumption';
 const kinds: [Kind, string, string][] = [
@@ -21,6 +21,9 @@ export function ProductWizard({ colors, brands, onCatalog, onClose, onCreated }:
   const [cost, setCost] = useState<number | null>(null);
   const [price, setPrice] = useState<number | null>(null);
   const [stock, setStock] = useState(0);
+  const [sizes, setSizes] = useState<string[]>(['P', 'M', 'G']);
+  const [sizeStock, setSizeStock] = useState<Record<string, number>>({});
+  const sized = kind === 'tshirt' && sizes.length > 0;
   const [minStock, setMinStock] = useState(0);
   const [photo, setPhoto] = useState<File | null>(null);
   const [preview, setPreview] = useState('');
@@ -44,7 +47,7 @@ export function ProductWizard({ colors, brands, onCatalog, onClose, onCreated }:
     if (pending) return;
     setPending(true); setError('');
     try {
-      const body = { name: name.trim(), type: resale ? 'resale' : 'consumption', unit: resale ? 'un' : unit, category: resale ? kind : null, colorId: resale ? colorId || null : null, brandId: kind === 'tshirt' ? brandId || null : null, minStock, notes: '', costPrice: cost === null ? null : cost / 100, salePriceCents: resale ? price : null, initialStock: stock };
+      const body = { name: name.trim(), type: resale ? 'resale' : 'consumption', unit: resale ? 'un' : unit, category: resale ? kind : null, colorId: resale ? colorId || null : null, brandId: kind === 'tshirt' ? brandId || null : null, sizes: sized ? sizes : [], minStock, notes: '', costPrice: cost === null ? null : cost / 100, salePriceCents: resale ? price : null, initialStock: sized ? Object.fromEntries(sizes.map(s => [s, sizeStock[s] ?? 0])) : stock };
       let { product } = await api<{ product: Product }>('products', json('POST', body));
       if (photo) {
         try { const { photoUrl } = await uploadPhoto(product.id, photo); product = { ...product, photoUrl }; }
@@ -55,13 +58,13 @@ export function ProductWizard({ colors, brands, onCatalog, onClose, onCreated }:
     finally { setPending(false); }
   }
   function restart() {
-    setStep(1); setKind(null); setName(''); setColorId(''); setBrandId(''); setUnit('un'); setCost(null); setPrice(null); setStock(0); setMinStock(0); setPhoto(null); setPreview(''); setSaved(null); setError('');
+    setStep(1); setKind(null); setName(''); setColorId(''); setBrandId(''); setUnit('un'); setCost(null); setPrice(null); setStock(0); setSizes(['P', 'M', 'G']); setSizeStock({}); setMinStock(0); setPhoto(null); setPreview(''); setSaved(null); setError('');
   }
 
   if (saved) return <Sheet title="Produto cadastrado" onClose={onClose}>
     <div className="st-success">
       <span className="st-success-mark"><Icon name="check" size={40} /></span>
-      <div className="st-saved-card"><Thumb product={saved} size={56} /><div><strong>{saved.name}</strong><small>{saved.stock} {units[saved.unit]} em estoque{saved.salePriceCents !== null ? ' · ' + money(saved.salePriceCents) : ''}</small></div></div>
+      <div className="st-saved-card"><Thumb product={saved} size={56} /><div><strong>{saved.name}</strong><small>{saved.stock} {units[saved.unit]} em estoque{saved.sizes.length ? ' (' + saved.sizes.map(s => s + ' ' + (saved.sizeStock[s] ?? 0)).join(', ') + ')' : ''}{saved.salePriceCents !== null ? ' · ' + money(saved.salePriceCents) : ''}</small></div></div>
       <ErrorText>{error}</ErrorText>
       <div className="st-two"><button className="quiet" onClick={restart}><Icon name="plus" size={16} /> Outro</button><button className="primary" onClick={onClose}>Concluir</button></div>
     </div>
@@ -84,6 +87,7 @@ export function ProductWizard({ colors, brands, onCatalog, onClose, onCreated }:
       <label className="st-field"><input autoFocus value={name} onChange={e => setName(e.target.value)} maxLength={120} placeholder={kind === 'mug' ? 'Ex.: Caneca Mãe Coruja' : kind === 'tshirt' ? 'Ex.: Camiseta Básica P' : kind === 'consumption' ? 'Ex.: Papel sublimático' : 'Ex.: Capinha iPhone 15'} aria-label="Nome do produto" enterKeyHint="next" /></label>
       {resale && <CatalogPicker label="Cor" resource="colors" items={colors} value={colorId} onChange={setColorId} onCreated={onCatalog} />}
       {kind === 'tshirt' && <CatalogPicker label="Marca" resource="brands" items={brands} value={brandId} onChange={setBrandId} onCreated={onCatalog} />}
+      {kind === 'tshirt' && <SizesPicker value={sizes} onChange={setSizes} />}
       {!resale && <div className="st-field"><span>Medida</span><Chips label="Unidade" value={unit} onChange={setUnit} options={Object.entries(units) as [Unit, string][]} /></div>}
       <ErrorText>{error}</ErrorText>
       <button className="primary st-block">Continuar <Icon name="arrow" size={18} /></button>
@@ -101,7 +105,8 @@ export function ProductWizard({ colors, brands, onCatalog, onClose, onCreated }:
 
     {step === 4 && <form onSubmit={e => { e.preventDefault(); next(); }}>
       <h3 className="st-q">Quantos você tem agora?</h3>
-      <div className="st-field st-center"><Stepper label="Estoque atual" value={stock} min={0} onChange={setStock} decimals={!resale && unit !== 'un'} /></div>
+      {sized ? <div className="st-size-stock">{sizes.map(s => <div key={s}><span className="st-size-tag">{s}</span><Stepper label={'Estoque ' + s} value={sizeStock[s] ?? 0} min={0} onChange={v => setSizeStock({ ...sizeStock, [s]: v })} /></div>)}<p className="st-hint">Total: {sizes.reduce((t, s) => t + (sizeStock[s] ?? 0), 0)}</p></div>
+        : <div className="st-field st-center"><Stepper label="Estoque atual" value={stock} min={0} onChange={setStock} decimals={!resale && unit !== 'un'} /></div>}
       <div className="st-field"><span>Avisar quando tiver menos de</span><Stepper label="Estoque mínimo" value={minStock} min={0} onChange={setMinStock} /></div>
       <p className="st-hint">O que já está na loja não entra como compra no financeiro.</p>
       <button className="primary st-block">Continuar <Icon name="arrow" size={18} /></button>

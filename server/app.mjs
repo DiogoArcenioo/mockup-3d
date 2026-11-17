@@ -1,13 +1,14 @@
 import express from 'express';
 import { randomUUID, createHmac, timingSafeEqual, createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { ValidationError, productInput, entryInput, saleInput, orderInput, uuid, dateInput, textField, quantity, cents, unitCost, CATEGORIES } from './finance.mjs';
+import { ValidationError, productInput, entryInput, saleInput, orderInput, sizeInput, uuid, dateInput, textField, quantity, cents, unitCost, CATEGORIES } from './finance.mjs';
 import { validateProductPhoto } from './product-photo.mjs';
 import { actorPool, actors } from './actor-pool.mjs';
 import { registerCashbook } from './cashbook.mjs';
+import { registerMoney } from './money.mjs';
 
 const equal = (a, b) => timingSafeEqual(createHash('sha256').update(a).digest(), createHash('sha256').update(b).digest());
-const productSelect = `SELECT p.*, photo.version AS photo_version, color.name AS color_name, brand.name AS brand_name, COALESCE(s.stock,0) AS stock, COALESCE(b.total_cents,0) AS purchase_total_cents,
+const productSelect = `SELECT p.*, photo.version AS photo_version, color.name AS color_name, brand.name AS brand_name, COALESCE(s.stock,0) AS stock, COALESCE(ss.size_stock,'{}'::jsonb) AS size_stock, COALESCE(b.total_cents,0) AS purchase_total_cents,
   COALESCE(b.quantity,0) AS purchased_quantity, b.total_cents::numeric / NULLIF(b.quantity,0) / 100 AS average_cost,
   latest.unit_cost AS last_cost, latest.purchased_at::text AS last_purchase_date,
   (b.quantity IS NOT NULL) AS has_entries
@@ -17,8 +18,9 @@ const productSelect = `SELECT p.*, photo.version AS photo_version, color.name AS
   LEFT JOIN forma_finance.product_brands brand ON brand.id=p.brand_id
   LEFT JOIN (SELECT product_id,sum(quantity) stock FROM forma_finance.stock_movements GROUP BY product_id) s ON s.product_id=p.id
   LEFT JOIN (SELECT product_id,sum(total_cents) total_cents,sum(quantity) quantity FROM forma_finance.entries GROUP BY product_id) b ON b.product_id=p.id
+  LEFT JOIN LATERAL (SELECT jsonb_object_agg(coalesce(size,''),q) size_stock FROM (SELECT size,sum(quantity) q FROM forma_finance.stock_movements WHERE product_id=p.id GROUP BY size HAVING sum(quantity)<>0) x) ss ON true
   LEFT JOIN LATERAL (SELECT unit_cost,purchased_at FROM forma_finance.entries WHERE product_id=p.id ORDER BY purchased_at DESC,created_at DESC,id DESC LIMIT 1) latest ON true`;
-const mapProduct = p => ({ id:p.id, name:p.name, type:p.type, unit:p.unit, category:p.category, colorId:p.color_id, colorName:p.color_name, brandId:p.brand_id, brandName:p.brand_name, photoUrl:p.photo_version?`/api/products/${p.id}/photo?v=${p.photo_version}`:null, minStock:Number(p.min_stock), notes:p.notes, stock:Number(p.stock), purchaseTotalCents:Number(p.purchase_total_cents), purchasedQuantity:Number(p.purchased_quantity), averageCost:p.average_cost === null ? null : Number(p.average_cost), lastCost:p.last_cost === null ? null : Number(p.last_cost), lastPurchaseDate:p.last_purchase_date, hasEntries:p.has_entries, salePriceCents:p.sale_price_cents == null ? null : Number(p.sale_price_cents), costPrice:p.cost_price == null ? null : Number(p.cost_price) });
+const mapProduct = p => ({ id:p.id, name:p.name, type:p.type, unit:p.unit, category:p.category, colorId:p.color_id, colorName:p.color_name, brandId:p.brand_id, brandName:p.brand_name, photoUrl:p.photo_version?`/api/products/${p.id}/photo?v=${p.photo_version}`:null, minStock:Number(p.min_stock), notes:p.notes, stock:Number(p.stock), purchaseTotalCents:Number(p.purchase_total_cents), purchasedQuantity:Number(p.purchased_quantity), averageCost:p.average_cost === null ? null : Number(p.average_cost), lastCost:p.last_cost === null ? null : Number(p.last_cost), lastPurchaseDate:p.last_purchase_date, hasEntries:p.has_entries, salePriceCents:p.sale_price_cents == null ? null : Number(p.sale_price_cents), costPrice:p.cost_price == null ? null : Number(p.cost_price), sizes:p.sizes||[], sizeStock:Object.fromEntries(Object.entries(p.size_stock||{}).map(([k,v])=>[k,Number(v)])) });
 const mapEntry = e => ({ id:e.id, productId:e.product_id, productName:e.product_name, productType:e.product_type, productCategory:e.product_category, productColor:e.product_color, productBrand:e.product_brand, unit:e.unit, purchasedAt:e.purchased_at_text, packaging:e.packaging, packageCount:e.package_count, unitsPerPackage:Number(e.units_per_package), quantity:Number(e.quantity), totalCents:Number(e.total_cents), unitCost:Number(e.unit_cost), supplier:e.supplier, notes:e.notes, createdAt:e.created_at });
 const entrySelect = `SELECT *, purchased_at::text AS purchased_at_text FROM forma_finance.entries`;
 const saleSelect = `SELECT *,sold_at::text AS sold_at_text FROM forma_finance.sales`;
@@ -30,16 +32,16 @@ const movementsSelect = `SELECT id,product_id,product_name,product_type,product_
 
 // Vendas antigas (um produto por registro) aparecem como pedidos de um item.
 const ordersSelect = `SELECT * FROM (
-  SELECT o.id,o.sold_at::text sold_at,o.customer,o.payment_method,o.notes,o.total_cents,o.list_total_cents,o.seller_name,o.created_at,
-    (SELECT jsonb_agg(jsonb_build_object('productId',s.product_id,'name',s.product_name,'color',s.product_color,'brand',s.product_brand,'unit',s.unit,'quantity',s.quantity,'totalCents',s.total_cents,'listPriceCents',s.list_price_cents,'unitCost',s.unit_cost) ORDER BY s.created_at,s.id) FROM forma_finance.sales s WHERE s.order_id=o.id) items
+  SELECT o.id,o.sold_at::text sold_at,o.customer,o.payment_method,o.notes,o.total_cents,o.list_total_cents,o.seller_name,o.created_at,o.on_credit,(SELECT d.status FROM forma_finance.debtors d WHERE d.order_id=o.id) debtor_status,
+    (SELECT jsonb_agg(jsonb_build_object('productId',s.product_id,'name',s.product_name,'size',s.size,'color',s.product_color,'brand',s.product_brand,'unit',s.unit,'quantity',s.quantity,'totalCents',s.total_cents,'listPriceCents',s.list_price_cents,'unitCost',s.unit_cost) ORDER BY s.created_at,s.id) FROM forma_finance.sales s WHERE s.order_id=o.id) items
   FROM forma_finance.sale_orders o
   UNION ALL
-  SELECT s.id,s.sold_at::text,s.customer,''::varchar,s.notes,s.total_cents,s.total_cents,coalesce(a.actor_name,'')::varchar,s.created_at,
+  SELECT s.id,s.sold_at::text,s.customer,''::varchar,s.notes,s.total_cents,s.total_cents,coalesce(a.actor_name,'')::varchar,s.created_at,false,null::varchar,
     jsonb_build_array(jsonb_build_object('productId',s.product_id,'name',s.product_name,'color',s.product_color,'brand',s.product_brand,'unit',s.unit,'quantity',s.quantity,'totalCents',s.total_cents,'listPriceCents',null,'unitCost',s.unit_cost))
   FROM forma_finance.sales s LEFT JOIN LATERAL (SELECT actor_name FROM forma_finance.activity_log WHERE entity='sales' AND entity_id=s.id AND operation='INSERT' ORDER BY id LIMIT 1) a ON true
   WHERE s.order_id IS NULL) x`;
-const mapOrder = o => ({id:o.id,soldAt:o.sold_at,customer:o.customer,paymentMethod:o.payment_method,notes:o.notes,totalCents:Number(o.total_cents),listTotalCents:Number(o.list_total_cents),sellerName:o.seller_name,createdAt:o.created_at,
-  items:(o.items||[]).map(i=>({productId:i.productId,name:i.name,color:i.color,brand:i.brand,unit:i.unit,quantity:Number(i.quantity),totalCents:Number(i.totalCents),listPriceCents:i.listPriceCents==null?null:Number(i.listPriceCents),unitCost:i.unitCost==null?null:Number(i.unitCost)}))});
+const mapOrder = o => ({id:o.id,soldAt:o.sold_at,customer:o.customer,paymentMethod:o.payment_method,notes:o.notes,totalCents:Number(o.total_cents),listTotalCents:Number(o.list_total_cents),sellerName:o.seller_name,createdAt:o.created_at,onCredit:o.on_credit,debtorStatus:o.debtor_status,
+  items:(o.items||[]).map(i=>({productId:i.productId,name:i.name,size:i.size??null,color:i.color,brand:i.brand,unit:i.unit,quantity:Number(i.quantity),totalCents:Number(i.totalCents),listPriceCents:i.listPriceCents==null?null:Number(i.listPriceCents),unitCost:i.unitCost==null?null:Number(i.unitCost)}))});
 async function loadOrder(db,id){return mapOrder((await db.query(ordersSelect+' WHERE x.id=$1',[id])).rows[0]);}
 
 export function createApp(pool, options = {}) {
@@ -111,16 +113,20 @@ export function createApp(pool, options = {}) {
     const p = productInput(req.body);
     const salePrice = cents(req.body?.salePriceCents,'Preço de venda',true);
     const cost = unitCost(req.body?.costPrice);
-    const initialStock = req.body?.initialStock == null || req.body?.initialStock === '' ? 0 : quantity(req.body.initialStock,'Estoque inicial',true);
-    if (p.unit==='un' && !Number.isInteger(initialStock)) throw new ValidationError('Informe uma quantidade inteira de unidades.');
+    // Com tamanhos, o estoque inicial vem por tamanho: { P: 2, M: 3 }.
+    const raw = req.body?.initialStock;
+    const initial = p.sizes.length
+      ? Object.entries(raw && typeof raw === 'object' ? raw : {}).map(([size,value])=>{ if(!p.sizes.includes(size)) throw new ValidationError('Tamanho inválido no estoque inicial.'); return [size,quantity(value,'Estoque inicial',true)]; })
+      : [[null, raw == null || raw === '' ? 0 : quantity(raw,'Estoque inicial',true)]];
+    if (p.unit==='un' && initial.some(([,q])=>!Number.isInteger(q))) throw new ValidationError('Informe uma quantidade inteira de unidades.');
     const id = randomUUID(), client = await pool.connect();
     try {
       await client.query('BEGIN');
-      await client.query(`INSERT INTO forma_finance.products (id,name,type,unit,min_stock,notes,category,color_id,brand_id,sale_price_cents,cost_price) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,[id,p.name,p.type,p.unit,p.minStock,p.notes,p.category,p.colorId,p.brandId,salePrice,cost]);
+      await client.query(`INSERT INTO forma_finance.products (id,name,type,unit,min_stock,notes,category,color_id,brand_id,sale_price_cents,cost_price,sizes) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,[id,p.name,p.type,p.unit,p.minStock,p.notes,p.category,p.colorId,p.brandId,salePrice,cost,p.sizes]);
       if (salePrice !== null) await client.query('INSERT INTO forma_finance.product_sale_prices(id,product_id,price_cents) VALUES($1,$2,$3)',[randomUUID(),id,salePrice]);
       if (cost !== null) await client.query("INSERT INTO forma_finance.product_cost_history(id,product_id,source,unit_cost) VALUES($1,$2,'register',$3)",[randomUUID(),id,cost]);
       // Estoque que já existia na loja entra como ajuste: não gera compra no financeiro.
-      if (initialStock > 0) await client.query(`INSERT INTO forma_finance.stock_movements(id,product_id,kind,quantity,occurred_at) VALUES($1,$2,'adjustment',$3,(now() AT TIME ZONE 'America/Sao_Paulo')::date)`,[randomUUID(),id,initialStock]);
+      for (const [size,amount] of initial) if (amount > 0) await client.query(`INSERT INTO forma_finance.stock_movements(id,product_id,kind,quantity,occurred_at,size) VALUES($1,$2,'adjustment',$3,(now() AT TIME ZONE 'America/Sao_Paulo')::date,$4)`,[randomUUID(),id,amount,size]);
       const saved = (await client.query(productSelect+' WHERE p.id=$1',[id])).rows[0];
       await client.query('COMMIT'); res.status(201).json({product:mapProduct(saved)});
     } catch(error) { await client.query('ROLLBACK'); throw error; } finally { client.release(); }
@@ -143,16 +149,18 @@ export function createApp(pool, options = {}) {
   });
   // Contagem física: grava a diferença como ajuste. Reenviar a mesma contagem não altera nada.
   app.post('/api/products/:id/count', async (req,res) => {
-    const id = uuid(req.params.id), counted = quantity(req.body?.counted,'Quantidade contada',true);
+    const id = uuid(req.params.id), counted = quantity(req.body?.counted,'Quantidade contada',true), size = sizeInput(req.body?.size);
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
-      const product = (await client.query('SELECT unit FROM forma_finance.products WHERE id=$1 FOR UPDATE',[id])).rows[0];
+      const product = (await client.query('SELECT unit,sizes FROM forma_finance.products WHERE id=$1 FOR UPDATE',[id])).rows[0];
       if (!product) throw new ValidationError('Produto não encontrado.',404);
+      if (size && !product.sizes.includes(size)) throw new ValidationError('Tamanho inválido.');
       if (product.unit==='un' && !Number.isInteger(counted)) throw new ValidationError('Informe uma quantidade inteira de unidades.');
-      const {rows:[balance]} = await client.query('SELECT COALESCE(sum(quantity),0) AS stock FROM forma_finance.stock_movements WHERE product_id=$1',[id]);
+      // Sem tamanho informado em produto com tamanhos, a contagem vale para o saldo antigo "sem tamanho".
+      const {rows:[balance]} = await client.query('SELECT COALESCE(sum(quantity),0) AS stock FROM forma_finance.stock_movements WHERE product_id=$1 AND (cardinality($3::varchar[])=0 OR size IS NOT DISTINCT FROM $2)',[id,size,product.sizes]);
       const diff = Math.round((counted - Number(balance.stock))*1000)/1000;
-      if (diff !== 0) await client.query(`INSERT INTO forma_finance.stock_movements(id,product_id,kind,quantity,occurred_at) VALUES($1,$2,'adjustment',$3,(now() AT TIME ZONE 'America/Sao_Paulo')::date)`,[randomUUID(),id,diff]);
+      if (diff !== 0) await client.query(`INSERT INTO forma_finance.stock_movements(id,product_id,kind,quantity,occurred_at,size) VALUES($1,$2,'adjustment',$3,(now() AT TIME ZONE 'America/Sao_Paulo')::date,$4)`,[randomUUID(),id,diff,product.sizes.length?size:null]);
       const saved = (await client.query(productSelect+' WHERE p.id=$1',[id])).rows[0];
       await client.query('COMMIT'); res.json({product:mapProduct(saved),difference:diff});
     } catch(error) { await client.query('ROLLBACK'); throw error; } finally { client.release(); }
@@ -161,11 +169,11 @@ export function createApp(pool, options = {}) {
     const id = uuid(req.params.id);
     const costs = await pool.query(`SELECT h.id,h.source,h.unit_cost,h.actor_name,h.created_at,e.quantity,e.supplier,e.purchased_at::text purchased_at FROM forma_finance.product_cost_history h LEFT JOIN forma_finance.entries e ON e.id=h.entry_id WHERE h.product_id=$1 ORDER BY h.created_at DESC,h.id DESC LIMIT 50`,[id]);
     const prices = await pool.query('SELECT id,price_cents,previous_cents,actor_name,created_at FROM forma_finance.product_sale_prices WHERE product_id=$1 ORDER BY created_at DESC,id DESC LIMIT 50',[id]);
-    const moves = await pool.query(`SELECT m.id,m.kind,m.quantity,m.occurred_at::text occurred_at,m.created_at,coalesce(s.customer,'') customer FROM forma_finance.stock_movements m LEFT JOIN forma_finance.sales s ON s.id=m.sale_id WHERE m.product_id=$1 ORDER BY m.occurred_at DESC,m.created_at DESC,m.id DESC LIMIT 50`,[id]);
+    const moves = await pool.query(`SELECT m.id,m.kind,m.quantity,m.size,m.occurred_at::text occurred_at,m.created_at,coalesce(s.customer,'') customer FROM forma_finance.stock_movements m LEFT JOIN forma_finance.sales s ON s.id=m.sale_id WHERE m.product_id=$1 ORDER BY m.occurred_at DESC,m.created_at DESC,m.id DESC LIMIT 50`,[id]);
     res.json({
       costs:costs.rows.map(r=>({id:r.id,source:r.source,unitCost:Number(r.unit_cost),actorName:r.actor_name,createdAt:r.created_at,quantity:r.quantity===null?null:Number(r.quantity),supplier:r.supplier||'',purchasedAt:r.purchased_at})),
       prices:prices.rows.map(r=>({id:r.id,priceCents:Number(r.price_cents),previousCents:r.previous_cents===null?null:Number(r.previous_cents),actorName:r.actor_name,createdAt:r.created_at})),
-      movements:moves.rows.map(r=>({id:r.id,kind:r.kind,quantity:Number(r.quantity),occurredAt:r.occurred_at,createdAt:r.created_at,customer:r.customer})),
+      movements:moves.rows.map(r=>({id:r.id,kind:r.kind,size:r.size,quantity:Number(r.quantity),occurredAt:r.occurred_at,createdAt:r.created_at,customer:r.customer})),
     });
   });
   app.put('/api/products/:id', async (req,res) => {
@@ -176,7 +184,10 @@ export function createApp(pool, options = {}) {
       const current = (await client.query('SELECT unit FROM forma_finance.products WHERE id=$1 FOR UPDATE',[id])).rows[0];
       if (!current) throw new ValidationError('Produto não encontrado.',404);
       if (current.unit !== p.unit && (await client.query('SELECT 1 FROM forma_finance.stock_movements WHERE product_id=$1 LIMIT 1',[id])).rowCount) throw new ValidationError('A unidade não pode mudar depois de movimentar o estoque.');
-      await client.query('UPDATE forma_finance.products SET name=$2,type=$3,unit=$4,min_stock=$5,notes=$6,category=$7,color_id=$8,brand_id=$9,updated_at=now() WHERE id=$1',[id,p.name,p.type,p.unit,p.minStock,p.notes,p.category,p.colorId,p.brandId]);
+      const {rows:withStock}=await client.query('SELECT size FROM forma_finance.stock_movements WHERE product_id=$1 AND size IS NOT NULL GROUP BY size HAVING sum(quantity)<>0',[id]);
+      const removed=withStock.map(r=>r.size).filter(size=>!p.sizes.includes(size));
+      if(removed.length)throw new ValidationError(`Ainda há estoque no tamanho ${removed.join(', ')}. Faça a contagem zerando antes de remover.`);
+      await client.query('UPDATE forma_finance.products SET name=$2,type=$3,unit=$4,min_stock=$5,notes=$6,category=$7,color_id=$8,brand_id=$9,sizes=$10,updated_at=now() WHERE id=$1',[id,p.name,p.type,p.unit,p.minStock,p.notes,p.category,p.colorId,p.brandId,p.sizes]);
       const saved = (await client.query(productSelect+' WHERE p.id=$1',[id])).rows[0];
       await client.query('COMMIT'); res.json({product:mapProduct(saved)});
     } catch(error) { await client.query('ROLLBACK'); throw error; } finally { client.release(); }
@@ -229,7 +240,7 @@ export function createApp(pool, options = {}) {
       await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[e.requestId]);
       const previous = (await client.query(entrySelect+' WHERE request_id=$1',[e.requestId])).rows[0];
       if (previous) {
-        const same = previous.product_id===e.productId && previous.purchased_at_text===e.purchasedAt && previous.packaging===e.packaging && previous.package_count===e.packageCount && Number(previous.units_per_package)===e.unitsPerPackage && Number(previous.total_cents)===e.totalCents && previous.supplier===e.supplier && previous.notes===e.notes;
+        const same = previous.product_id===e.productId && (previous.size??null)===e.size && previous.purchased_at_text===e.purchasedAt && previous.packaging===e.packaging && previous.package_count===e.packageCount && Number(previous.units_per_package)===e.unitsPerPackage && Number(previous.total_cents)===e.totalCents && previous.supplier===e.supplier && previous.notes===e.notes;
         if (!same) throw new ValidationError('Esta entrada já foi registrada com outros dados. Abra uma nova entrada.',409);
         await client.query('COMMIT'); return res.json({entry:mapEntry(previous),repeated:true});
       }
@@ -237,12 +248,14 @@ export function createApp(pool, options = {}) {
         LEFT JOIN forma_finance.product_colors color ON color.id=p.color_id
         LEFT JOIN forma_finance.product_brands brand ON brand.id=p.brand_id WHERE p.id=$1 FOR UPDATE OF p`,[e.productId])).rows[0];
       if (!product) throw new ValidationError('Produto não encontrado.',404);
+      if (product.sizes.length && !e.size) throw new ValidationError('Escolha o tamanho.');
+      if (e.size && !product.sizes.includes(e.size)) throw new ValidationError('Tamanho inválido para este produto.');
       const id=randomUUID();
       const {rows:[entry]}=await client.query(`INSERT INTO forma_finance.entries
-        (id,request_id,product_id,product_name,product_type,unit,purchased_at,packaging,package_count,units_per_package,total_cents,supplier,notes,product_category,product_color,product_brand)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING *,purchased_at::text AS purchased_at_text`,
-        [id,e.requestId,e.productId,product.name,product.type,product.unit,e.purchasedAt,e.packaging,e.packageCount,e.unitsPerPackage,e.totalCents,e.supplier,e.notes,product.category,product.color_name || '',product.brand_name || '']);
-      await client.query(`INSERT INTO forma_finance.stock_movements (id,product_id,entry_id,kind,quantity,occurred_at) VALUES ($1,$2,$3,'purchase',$4,$5)`,[randomUUID(),e.productId,id,entry.quantity,e.purchasedAt]);
+        (id,request_id,product_id,product_name,product_type,unit,purchased_at,packaging,package_count,units_per_package,total_cents,supplier,notes,product_category,product_color,product_brand,size)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING *,purchased_at::text AS purchased_at_text`,
+        [id,e.requestId,e.productId,product.name,product.type,product.unit,e.purchasedAt,e.packaging,e.packageCount,e.unitsPerPackage,e.totalCents,e.supplier,e.notes,product.category,product.color_name || '',product.brand_name || '',e.size]);
+      await client.query(`INSERT INTO forma_finance.stock_movements (id,product_id,entry_id,kind,quantity,occurred_at,size) VALUES ($1,$2,$3,'purchase',$4,$5,$6)`,[randomUUID(),e.productId,id,entry.quantity,e.purchasedAt,e.size]);
       // A entrada mais recente define o custo atual do cadastro.
       await client.query("INSERT INTO forma_finance.product_cost_history(id,product_id,entry_id,source,unit_cost) VALUES($1,$2,$3,'entry',$4)",[randomUUID(),e.productId,id,entry.unit_cost]);
       await client.query('UPDATE forma_finance.products SET cost_price=$2 WHERE id=$1',[e.productId,entry.unit_cost]);
@@ -282,9 +295,9 @@ export function createApp(pool, options = {}) {
     try {
       await client.query('BEGIN');
       await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[o.requestId]);
-      const previous=(await client.query('SELECT id,sold_at::text sold_at,customer,total_cents,item_count FROM forma_finance.sale_orders WHERE request_id=$1',[o.requestId])).rows[0];
+      const previous=(await client.query('SELECT id,sold_at::text sold_at,customer,total_cents,item_count,on_credit FROM forma_finance.sale_orders WHERE request_id=$1',[o.requestId])).rows[0];
       if (previous) {
-        const same=previous.sold_at===o.soldAt&&previous.customer===o.customer&&Number(previous.total_cents)===o.totalCents&&previous.item_count===o.items.length;
+        const same=previous.sold_at===o.soldAt&&previous.customer===o.customer&&Number(previous.total_cents)===o.totalCents&&previous.item_count===o.items.length&&previous.on_credit===o.onCredit;
         if(!same)throw new ValidationError('Esta venda já foi registrada com outros dados. Comece uma nova venda.',409);
         const order=await loadOrder(client,previous.id);
         await client.query('COMMIT');return res.json({order,repeated:true});
@@ -296,25 +309,37 @@ export function createApp(pool, options = {}) {
         WHERE p.id=ANY($1::uuid[]) ORDER BY p.id FOR UPDATE OF p`,[ids]);
       if(locked.length!==ids.length)throw new ValidationError('Um dos produtos não foi encontrado. Atualize a tela e tente novamente.',404);
       const products=new Map(locked.map(p=>[p.id,p]));
-      const {rows:balances}=await client.query('SELECT product_id,COALESCE(sum(quantity),0) stock FROM forma_finance.stock_movements WHERE product_id=ANY($1::uuid[]) GROUP BY product_id',[ids]);
-      const stock=new Map(balances.map(b=>[b.product_id,Number(b.stock)])),needed=new Map();
+      const {rows:balances}=await client.query('SELECT product_id,size,COALESCE(sum(quantity),0) stock FROM forma_finance.stock_movements WHERE product_id=ANY($1::uuid[]) GROUP BY product_id,size',[ids]);
+      // Produto sem tamanhos: todo o saldo vale; com tamanhos: saldo do tamanho escolhido.
+      const keyOf=(p,size)=>p.sizes.length?`${p.id}|${size??''}`:p.id;
+      const stock=new Map(),needed=new Map();
+      for(const b of balances){const k=keyOf(products.get(b.product_id),b.size);stock.set(k,(stock.get(k)||0)+Number(b.stock));}
       for(const item of o.items){
         const p=products.get(item.productId);
         if(p.type!=='resale')throw new ValidationError(`${p.name}: produto de uso e consumo não pode ser vendido.`);
         if(p.unit==='un'&&!Number.isInteger(item.quantity))throw new ValidationError(`${p.name}: informe uma quantidade inteira.`);
-        needed.set(p.id,Math.round(((needed.get(p.id)||0)+item.quantity)*1000)/1000);
+        if(!p.sizes.length)item.size=null;
+        else if(item.size&&!p.sizes.includes(item.size))throw new ValidationError(`${p.name}: tamanho inválido.`);
+        else if(!item.size&&!(stock.get(keyOf(p,null))>0))throw new ValidationError(`${p.name}: escolha o tamanho.`);
+        const k=keyOf(p,item.size);
+        needed.set(k,Math.round(((needed.get(k)||0)+item.quantity)*1000)/1000);
       }
-      for(const [productId,amount] of needed){const available=stock.get(productId)||0;if(available<amount)throw new ValidationError(`Estoque insuficiente de ${products.get(productId).name}: restam ${available.toLocaleString('pt-BR')}.`,409);}
+      for(const [k,amount] of needed){const available=stock.get(k)||0;if(available<amount){const [pid,size]=k.split('|');throw new ValidationError(`Estoque insuficiente de ${products.get(pid).name}${size?' '+size:''}: restam ${available.toLocaleString('pt-BR')}.`,409);}}
       const id=randomUUID(),first=products.get(o.items[0].productId);
       const summary=(first.name+(o.items.length>1?` +${o.items.length-1}`:'')).slice(0,200);
       const listTotal=o.items.reduce((sum,item)=>{const p=products.get(item.productId);return sum+Math.round((p.sale_price_cents===null?item.unitPriceCents:Number(p.sale_price_cents))*item.quantity);},0);
-      await client.query(`INSERT INTO forma_finance.sale_orders(id,request_id,sold_at,customer,payment_method,notes,summary,item_count,list_total_cents,total_cents,seller_id,seller_name)
-        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,[id,o.requestId,o.soldAt,o.customer,o.paymentMethod,o.notes,summary,o.items.length,listTotal,o.totalCents,actor?.id??null,actor?.name??'']);
+      await client.query(`INSERT INTO forma_finance.sale_orders(id,request_id,sold_at,customer,payment_method,notes,summary,item_count,list_total_cents,total_cents,seller_id,seller_name,on_credit)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,[id,o.requestId,o.soldAt,o.customer,o.paymentMethod,o.notes,summary,o.items.length,listTotal,o.totalCents,actor?.id??null,actor?.name??'',o.onCredit]);
       for(const item of o.items){
         const p=products.get(item.productId),saleId=randomUUID();
-        await client.query(`INSERT INTO forma_finance.sales(id,request_id,order_id,product_id,product_name,product_type,product_category,product_color,product_brand,unit,sold_at,quantity,total_cents,customer,notes,list_price_cents,unit_cost)
-          VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'',$15,$16)`,[saleId,randomUUID(),id,p.id,p.name,p.type,p.category,p.color_name||'',p.brand_name||'',p.unit,o.soldAt,item.quantity,item.totalCents,o.customer,p.sale_price_cents,p.cost_price]);
-        await client.query(`INSERT INTO forma_finance.stock_movements(id,product_id,sale_id,kind,quantity,occurred_at) VALUES($1,$2,$3,'sale',$4,$5)`,[randomUUID(),p.id,saleId,-item.quantity,o.soldAt]);
+        await client.query(`INSERT INTO forma_finance.sales(id,request_id,order_id,product_id,product_name,product_type,product_category,product_color,product_brand,unit,sold_at,quantity,total_cents,customer,notes,list_price_cents,unit_cost,size)
+          VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'',$15,$16,$17)`,[saleId,randomUUID(),id,p.id,p.name,p.type,p.category,p.color_name||'',p.brand_name||'',p.unit,o.soldAt,item.quantity,item.totalCents,o.customer,p.sale_price_cents,p.cost_price,item.size]);
+        await client.query(`INSERT INTO forma_finance.stock_movements(id,product_id,sale_id,kind,quantity,occurred_at,size) VALUES($1,$2,$3,'sale',$4,$5,$6)`,[randomUUID(),p.id,saleId,-item.quantity,o.soldAt,item.size]);
+      }
+      // Venda no fiado: o devedor é cadastrado na mesma transação.
+      if(o.onCredit){
+        const items=o.items.map(i=>{const p=products.get(i.productId);return `${Number(i.quantity).toLocaleString('pt-BR')}× ${p.name}${i.size?' '+i.size:''}${p.color_name?' · '+p.color_name:''}`;}).join('\n').slice(0,2000);
+        await client.query('INSERT INTO forma_finance.debtors(id,request_id,name,items,total_cents,owed_at,order_id) VALUES($1,$2,$3,$4,$5,$6,$7)',[randomUUID(),randomUUID(),o.customer,items,o.totalCents,o.soldAt,id]);
       }
       const order=await loadOrder(client,id);
       await client.query('COMMIT');res.status(201).json({order});
@@ -348,6 +373,7 @@ export function createApp(pool, options = {}) {
     res.json({entries:rows.map(row=>({...mapEntry({...row,supplier:row.kind==='purchase'?row.counterparty:''}),kind:row.kind,customer:row.kind==='sale'?row.counterparty:''})),count:Number(totals.count),purchaseTotalCents:Number(totals.purchases),salesTotalCents:Number(totals.sales),page,pages:Math.ceil(Number(totals.count)/20)});
   });
   registerCashbook(app,pool);
+  registerMoney(app,pool);
   app.use('/api', (_req,res) => res.status(404).json({error:'Recurso não encontrado.'}));
   if (options.static !== false) app.use(express.static(fileURLToPath(new URL('../dist/',import.meta.url)), {setHeaders(res,path){if(path.endsWith('sw.js') || path.endsWith('index.html')) res.set('Cache-Control','no-cache');}}));
   app.use((error,_req,res,_next) => {
